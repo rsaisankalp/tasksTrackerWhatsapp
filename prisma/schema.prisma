@@ -1,0 +1,302 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  phone         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts     Account[]
+  sessions     Session[]
+  memberships  OrgMember[]
+  ownedOrgs    Organization[]  @relation("OrgOwner")
+  createdTasks Task[]          @relation("TaskCreator")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Organization ─────────────────────────────────────────────────────────────
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logoUrl   String?
+  ownerId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Email domains that auto-join users to this org (e.g. ["vaidicpujas.org"])
+  emailDomains String[] @default([])
+
+  // WhatsApp group JID for this org (created during onboarding)
+  waGroupJid String?
+
+  // Working hours: { timezone, workDays: number[], startHour, endHour }
+  workingHoursConfig Json @default("{\"timezone\":\"Asia/Kolkata\",\"workDays\":[1,2,3,4,5],\"startHour\":9,\"endHour\":18}")
+
+  // Reminder intervals in hours
+  emergencyInterval Int @default(3)
+  highInterval      Int @default(5)
+  midInterval       Int @default(8)
+  lowInterval       Int @default(48)
+
+  owner           User              @relation("OrgOwner", fields: [ownerId], references: [id])
+  members         OrgMember[]
+  contacts        Contact[]
+  projects        Project[]
+  tasks           Task[]
+  reminders       Reminder[]
+  taskComments    TaskComment[]
+  whatsappSession WhatsAppSession?
+}
+
+model OrgMember {
+  id       String   @id @default(cuid())
+  orgId    String
+  userId   String
+  role     OrgRole  @default(MEMBER)
+  joinedAt DateTime @default(now())
+
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+// ─── WhatsApp ─────────────────────────────────────────────────────────────────
+
+model WhatsAppSession {
+  id        String         @id @default(cuid())
+  orgId     String         @unique
+  phone     String?
+  status    WhatsAppStatus @default(DISCONNECTED)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+
+enum WhatsAppStatus {
+  DISCONNECTED
+  CONNECTING
+  QR_PENDING
+  CONNECTED
+}
+
+// ─── Contacts ─────────────────────────────────────────────────────────────────
+
+model Contact {
+  id              String     @id @default(cuid())
+  orgId           String
+  name            String
+  phone           String?
+  email           String?
+  role            String?
+  department      String?
+  trustLevel      TrustLevel @default(INTERNAL)
+  googleContactId String?
+  avatarUrl       String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  org            Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  assignedTasks  Task[]       @relation("TaskExecutor")
+
+  @@index([orgId])
+  @@index([phone])
+}
+
+enum TrustLevel {
+  INTERNAL
+  TRUSTED
+  EXTERNAL
+}
+
+// ─── Projects ─────────────────────────────────────────────────────────────────
+
+model Project {
+  id          String        @id @default(cuid())
+  orgId       String
+  name        String
+  description String?
+  color       String        @default("#6366f1")
+  status      ProjectStatus @default(ACTIVE)
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  tasks Task[]
+
+  @@index([orgId])
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  ARCHIVED
+}
+
+// ─── Tasks ───────────────────────────────────────────────────────────────────
+
+model Task {
+  id          String     @id @default(cuid())
+  orgId       String
+  projectId   String?
+  parentId    String?
+  title       String
+  description String?
+  status      TaskStatus @default(TODO)
+  importance  Importance @default(MID)
+  eventType   EventType  @default(ONE_TIME)
+
+  executorContactId String?
+  createdById       String
+
+  deadline    DateTime?
+  completedAt DateTime?
+
+  // Reminder config
+  reminderHour     Int? // For repeatable: time of day to remind (hour 0-23)
+  reminderInterval Int? // Override interval in hours
+  daysBeforeEvent  Int? // For ONE_TIME_EVENT: remind N days before
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org             Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  project         Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  parent          Task?        @relation("Subtasks", fields: [parentId], references: [id], onDelete: Cascade)
+  subtasks        Task[]       @relation("Subtasks")
+  executorContact Contact?     @relation("TaskExecutor", fields: [executorContactId], references: [id])
+  createdBy       User         @relation("TaskCreator", fields: [createdById], references: [id])
+  reminders       Reminder[]
+  comments        TaskComment[]
+
+  @@index([orgId])
+  @@index([projectId])
+  @@index([deadline])
+  @@index([status])
+  @@index([executorContactId])
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  DONE
+  CANCELLED
+}
+
+enum Importance {
+  EMERGENCY
+  HIGH
+  MID
+  LOW
+}
+
+enum EventType {
+  ONE_TIME
+  ONE_TIME_EVENT
+  REGULAR
+  REPEATABLE
+}
+
+// ─── Reminders ───────────────────────────────────────────────────────────────
+
+model Reminder {
+  id          String          @id @default(cuid())
+  orgId       String
+  taskId      String
+  sentAt      DateTime?
+  status      ReminderStatus  @default(PENDING)
+  messageBody String?
+  waMessageId String?
+  createdAt   DateTime        @default(now())
+
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  task Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, status])
+  @@index([taskId])
+  @@index([waMessageId])
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  FAILED
+  ACKNOWLEDGED
+}
+
+// ─── Task Comments ────────────────────────────────────────────────────────────
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  orgId     String
+  taskId    String
+  author    String   // "system", "ai", phone number, or user name
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  task Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([taskId])
+}
