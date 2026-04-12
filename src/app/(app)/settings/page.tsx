@@ -69,6 +69,7 @@ export default async function SettingsPage({
         id: o.id,
         name: o.name,
         slug: o.slug,
+        type: (o as any).type ?? "TEAM",
         createdAt: o.createdAt.toISOString(),
         owner: o.owner,
         members: o.members.map((m) => ({

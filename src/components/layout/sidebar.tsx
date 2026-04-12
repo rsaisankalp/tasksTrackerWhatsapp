@@ -11,6 +11,7 @@ interface Org {
   name: string;
   slug: string;
   role: string;
+  type?: string;
 }
 
 interface SidebarProps {
@@ -116,7 +117,10 @@ export default function Sidebar({ orgs, user }: SidebarProps) {
                 <div className="w-6 h-6 bg-primary-500 rounded-md flex items-center justify-center text-white text-xs font-bold">
                   {org.name[0].toUpperCase()}
                 </div>
-                <span className="text-sm text-white truncate">{org.name}</span>
+                <span className="text-sm text-white truncate flex-1">{org.name}</span>
+                {org.type === "PERSONAL" && (
+                  <span className="text-xs bg-purple-500/30 text-purple-200 px-1.5 py-0.5 rounded-full flex-shrink-0">Personal</span>
+                )}
                 {idx === currentOrgIdx && (
                   <svg className="w-4 h-4 text-primary-400 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />

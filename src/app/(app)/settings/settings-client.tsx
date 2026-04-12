@@ -38,6 +38,7 @@ interface PlatformOrg {
   id: string;
   name: string;
   slug: string;
+  type?: string;
   createdAt: string;
   owner: { name: string | null; email: string };
   members: Array<{ id: string; userId: string; role: string; user: { id: string; name: string | null; email: string } }>;
@@ -132,6 +133,12 @@ export default function SettingsClient({
   const [newOrgSlug, setNewOrgSlug] = useState("");
   const [creatingOrg, setCreatingOrg] = useState(false);
   const [platformError, setPlatformError] = useState("");
+  const [showCreateInvite, setShowCreateInvite] = useState(false);
+  const [inviteOrgId, setInviteOrgId] = useState("");
+  const [inviteMaxUses, setInviteMaxUses] = useState(10);
+  const [inviteExpiryDays, setInviteExpiryDays] = useState<number | "">("");
+  const [creatingPlatformInvite, setCreatingPlatformInvite] = useState(false);
+  const [platformInviteResult, setPlatformInviteResult] = useState<string | null>(null);
 
   const isOwner = currentUserRole === "OWNER";
   const isAdminOrOwner = ["OWNER", "ADMIN"].includes(currentUserRole);
@@ -703,17 +710,25 @@ export default function SettingsClient({
         {/* Platform Tab */}
         {activeTab === "platform" && isSuperAdmin && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <div>
                 <h2 className="text-base font-semibold text-gray-900">All Organizations</h2>
                 <p className="text-sm text-gray-500 mt-0.5">{platformOrgs.length} organizations on the platform</p>
               </div>
-              <button
-                onClick={() => { setShowCreateOrg(true); setPlatformError(""); }}
-                className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-primary-700 transition-colors"
-              >
-                + Create Org
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setShowCreateInvite(true); setInviteOrgId(platformOrgs[0]?.id ?? ""); setPlatformInviteResult(null); }}
+                  className="flex items-center gap-2 border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+                >
+                  🔗 Create Invite
+                </button>
+                <button
+                  onClick={() => { setShowCreateOrg(true); setPlatformError(""); }}
+                  className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-primary-700 transition-colors"
+                >
+                  + Create Org
+                </button>
+              </div>
             </div>
 
             {platformOrgs.map((o) => (
@@ -726,6 +741,9 @@ export default function SettingsClient({
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-gray-900 text-sm">{o.name}</span>
                       <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{o.slug}</span>
+                      {o.type === "PERSONAL" && (
+                        <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-medium">Personal</span>
+                      )}
                     </div>
                     <p className="text-xs text-gray-500 mt-0.5">
                       {o.members.length} members · {o._count.projects} projects · {o._count.tasks} tasks
@@ -733,19 +751,7 @@ export default function SettingsClient({
                   </div>
                   <div className="flex gap-2 flex-shrink-0">
                     <button
-                      onClick={async () => {
-                        const res = await fetch("/api/invites", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ orgId: o.id, maxUses: 50 }),
-                        });
-                        const data = await res.json();
-                        if (data.code) {
-                          const link = `${window.location.origin}/invite/${data.code}`;
-                          await navigator.clipboard.writeText(link).catch(() => {});
-                          alert(`Invite link copied:\n${link}`);
-                        }
-                      }}
+                      onClick={() => { setInviteOrgId(o.id); setInviteMaxUses(10); setInviteExpiryDays(""); setPlatformInviteResult(null); setShowCreateInvite(true); }}
                       className="text-xs border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
                     >
                       🔗 Invite
@@ -819,6 +825,100 @@ export default function SettingsClient({
                 )}
               </div>
             ))}
+
+            {/* Create Invite Modal */}
+            {showCreateInvite && (
+              <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-5">Create Invite Link</h2>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Organization</label>
+                      <select
+                        value={inviteOrgId}
+                        onChange={(e) => setInviteOrgId(e.target.value)}
+                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                      >
+                        {platformOrgs.map((o) => (
+                          <option key={o.id} value={o.id}>{o.name} ({o.slug})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Max uses</label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={inviteMaxUses}
+                          onChange={(e) => setInviteMaxUses(Number(e.target.value))}
+                          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Expires in (days)</label>
+                        <input
+                          type="number"
+                          min={1}
+                          placeholder="Never"
+                          value={inviteExpiryDays}
+                          onChange={(e) => setInviteExpiryDays(e.target.value === "" ? "" : Number(e.target.value))}
+                          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {platformInviteResult && (
+                    <div className="mt-4 bg-green-50 border border-green-200 rounded-xl p-3">
+                      <p className="text-xs text-green-700 font-medium mb-1">Invite link created & copied!</p>
+                      <p className="text-xs text-green-600 break-all font-mono">{platformInviteResult}</p>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(platformInviteResult).catch(() => {})}
+                        className="mt-2 text-xs text-primary-600 hover:text-primary-700 font-medium"
+                      >
+                        Copy again
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 mt-6">
+                    <button onClick={() => setShowCreateInvite(false)} className="flex-1 border border-gray-200 text-gray-600 py-3 rounded-xl text-sm hover:bg-gray-50 transition-colors">
+                      Close
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!inviteOrgId) return;
+                        setCreatingPlatformInvite(true);
+                        try {
+                          const res = await fetch("/api/invites", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              orgId: inviteOrgId,
+                              maxUses: inviteMaxUses,
+                              expiresInDays: inviteExpiryDays !== "" ? inviteExpiryDays : undefined,
+                            }),
+                          });
+                          const data = await res.json();
+                          if (data.code) {
+                            const link = `${window.location.origin}/invite/${data.code}`;
+                            setPlatformInviteResult(link);
+                            await navigator.clipboard.writeText(link).catch(() => {});
+                          }
+                        } finally {
+                          setCreatingPlatformInvite(false);
+                        }
+                      }}
+                      disabled={!inviteOrgId || creatingPlatformInvite}
+                      className="flex-1 bg-primary-600 text-white py-3 rounded-xl text-sm font-medium hover:bg-primary-700 disabled:opacity-50 transition-colors"
+                    >
+                      {creatingPlatformInvite ? "Creating..." : "Generate Link"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Create Org Modal */}
             {showCreateOrg && (
