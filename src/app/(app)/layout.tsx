@@ -44,12 +44,6 @@ export default async function AppLayout({
 
   const firstOrg = orgs[0];
 
-  const platformAdminEmails = (process.env.PLATFORM_ADMIN_EMAILS || "")
-    .split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
-  const isSuperAdmin =
-    platformAdminEmails.length === 0 ||
-    platformAdminEmails.includes((session.user.email ?? "").toLowerCase());
-
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       <Sidebar
@@ -60,7 +54,6 @@ export default async function AppLayout({
           email: session.user.email ?? "",
           image: session.user.image ?? null,
         }}
-        isSuperAdmin={isSuperAdmin}
       />
       <main className="flex-1 overflow-auto pb-16 md:pb-0">{children}</main>
       <MobileNav orgId={firstOrg?.id ?? ""} />

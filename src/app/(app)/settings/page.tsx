@@ -3,6 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import SettingsClient from "./settings-client";
 
+function isPlatformAdmin(email: string): boolean {
+  const allowed = (process.env.PLATFORM_ADMIN_EMAILS || "")
+    .split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+  return allowed.length === 0 || allowed.includes(email.toLowerCase());
+}
+
 export default async function SettingsPage({
   searchParams,
 }: {
@@ -19,7 +25,9 @@ export default async function SettingsPage({
   const orgId = searchParams.orgId || membership?.orgId;
   if (!orgId) redirect("/onboarding");
 
-  const [org, members, inviteCodes] = await Promise.all([
+  const isSuperAdmin = isPlatformAdmin(session.user.email ?? "");
+
+  const [org, members, inviteCodes, allOrgs] = await Promise.all([
     prisma.organization.findUnique({
       where: { id: orgId },
       include: { whatsappSession: true },
@@ -34,6 +42,19 @@ export default async function SettingsPage({
       orderBy: { createdAt: "desc" },
       include: { createdBy: { select: { name: true } } },
     }),
+    isSuperAdmin
+      ? prisma.organization.findMany({
+          include: {
+            owner: { select: { name: true, email: true } },
+            members: {
+              include: { user: { select: { id: true, name: true, email: true } } },
+              orderBy: { role: "asc" },
+            },
+            _count: { select: { projects: true, tasks: true } },
+          },
+          orderBy: { createdAt: "desc" },
+        })
+      : Promise.resolve([]),
   ]);
 
   if (!org) redirect("/dashboard");
@@ -43,6 +64,21 @@ export default async function SettingsPage({
       orgId={orgId}
       currentUserId={session.user.id}
       currentUserRole={membership?.role ?? "MEMBER"}
+      isSuperAdmin={isSuperAdmin}
+      allOrgs={allOrgs.map((o) => ({
+        id: o.id,
+        name: o.name,
+        slug: o.slug,
+        createdAt: o.createdAt.toISOString(),
+        owner: o.owner,
+        members: o.members.map((m) => ({
+          id: m.id,
+          userId: m.userId,
+          role: m.role,
+          user: m.user,
+        })),
+        _count: o._count,
+      }))}
       initialTab={searchParams.tab ?? "general"}
       org={{
         id: org.id,
