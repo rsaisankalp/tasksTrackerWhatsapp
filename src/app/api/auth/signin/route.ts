@@ -84,6 +84,31 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // Auto-create personal org for new users with no memberships
+  const existingMemberships = await prisma.orgMember.count({ where: { userId: user.id } });
+  if (existingMemberships === 0) {
+    const baseSlug = (user.email.split("@")[0] ?? "personal")
+      .toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/^-+|-+$/g, "").slice(0, 30) || "personal";
+    // Ensure slug is unique
+    let slug = baseSlug;
+    let attempt = 0;
+    while (await prisma.organization.findUnique({ where: { slug } })) {
+      attempt++;
+      slug = `${baseSlug}-${attempt}`;
+    }
+    const personalOrg = await prisma.organization.create({
+      data: {
+        name: `${user.name ?? user.email}'s Workspace`,
+        slug,
+        type: "PERSONAL",
+        ownerId: user.id,
+        members: { create: { userId: user.id, role: "OWNER" } },
+        projects: { create: { name: "General", color: "#6366f1", status: "ACTIVE" } },
+      },
+    });
+    if (!targetOrg) targetOrg = { id: personalOrg.id, slug: personalOrg.slug };
+  }
+
   // Find first org membership
   const membership = await prisma.orgMember.findFirst({
     where: { userId: user.id },

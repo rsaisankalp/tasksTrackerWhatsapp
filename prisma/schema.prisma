@@ -73,6 +73,9 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // "PERSONAL" = auto-created private workspace; "TEAM" = shared org
+  type         String   @default("TEAM") // "PERSONAL" | "TEAM"
+
   // Email domains that auto-join users to this org (e.g. ["vaidicpujas.org"])
   emailDomains String[] @default([])
 
