@@ -81,6 +81,13 @@ export async function POST(req: NextRequest) {
           role: "OWNER",
         },
       },
+      projects: {
+        create: {
+          name: "General",
+          color: "#6366f1",
+          status: "ACTIVE",
+        },
+      },
     },
   });
 

@@ -54,7 +54,7 @@ export default function TaskCard({ task, orgId, onStatusChange }: TaskCardProps)
 
   return (
     <Link
-      href={`/projects?orgId=${orgId}&taskId=${task.id}`}
+      href={task.project ? `/projects/${task.project.id}?orgId=${orgId}` : `/projects?orgId=${orgId}`}
       className={`group block bg-white border border-gray-100 border-l-4 ${cfg.border} rounded-xl p-4 hover:shadow-md hover:border-gray-200 transition-all duration-200`}
     >
       <div className="flex items-start gap-3">

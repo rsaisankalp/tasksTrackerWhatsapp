@@ -4,13 +4,20 @@ import { cookies } from "next/headers";
 import { SESSION_OPTIONS, SessionData } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
+// Build the base origin from forwarded headers (handles reverse proxy like Caddy)
+function getOrigin(req: NextRequest): string {
+  const proto = req.headers.get("x-forwarded-proto") ?? "https";
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "localhost:3000";
+  return `${proto}://${host}`;
+}
+
 // Refresh the session to pick up new org membership (POST or GET)
 export async function GET(req: NextRequest) {
   const redirectTo = req.nextUrl.searchParams.get("redirect") ?? "/dashboard";
   const cookieStore = cookies();
   const session = await getIronSession<SessionData>(cookieStore, SESSION_OPTIONS);
   if (!session.userId) {
-    return NextResponse.redirect(new URL("/login", req.url));
+    return NextResponse.redirect(new URL("/login", getOrigin(req)));
   }
 
   const membership = await prisma.orgMember.findFirst({
@@ -26,7 +33,7 @@ export async function GET(req: NextRequest) {
     await session.save();
   }
 
-  return NextResponse.redirect(new URL(redirectTo, req.url));
+  return NextResponse.redirect(new URL(redirectTo, getOrigin(req)));
 }
 
 export async function POST(req: NextRequest) {

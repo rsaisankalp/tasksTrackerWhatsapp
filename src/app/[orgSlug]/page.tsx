@@ -10,7 +10,7 @@ interface Props {
 // Known app route prefixes — don't treat these as org slugs
 const RESERVED_PATHS = new Set([
   "dashboard", "projects", "contacts", "settings", "onboarding",
-  "login", "api", "_next", "favicon.ico",
+  "login", "api", "_next", "favicon.ico", "invite",
 ]);
 
 export default async function OrgLandingPage({ params }: Props) {

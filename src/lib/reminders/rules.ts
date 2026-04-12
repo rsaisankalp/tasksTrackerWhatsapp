@@ -75,7 +75,8 @@ export function formatReminderMessage(
   taskTitle: string,
   subtasks: Array<{ index: number; title: string; status: string }>,
   deadline: Date | null,
-  importance: string
+  importance: string,
+  magicLink?: string
 ): string {
   const importanceEmoji: Record<string, string> = {
     EMERGENCY: "🚨",
@@ -110,6 +111,10 @@ export function formatReminderMessage(
     }
   } else {
     msg += `\nReply *done* to mark complete`;
+  }
+
+  if (magicLink) {
+    msg += `\n\n📱 *View your tasks:* ${magicLink}`;
   }
 
   return msg;

@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { formatReminderMessage } from "@/lib/reminders/rules";
+import { baileysManager } from "@/lib/whatsapp/manager";
+import { nanoid } from "nanoid";
+
+const APP_URL = process.env.APP_URL ?? "https://tasks.vaidicpujas.in";
 
 const CreateTaskSchema = z.object({
   orgId: z.string(),
@@ -18,6 +23,8 @@ const CreateTaskSchema = z.object({
   reminderHour: z.number().optional(),
   reminderInterval: z.number().optional(),
   daysBeforeEvent: z.number().optional(),
+  recurringFrequency: z.enum(["DAILY", "WEEKLY", "MONTHLY"]).optional(),
+  recurringDays: z.array(z.number()).optional(),
   subtasks: z
     .array(z.object({ title: z.string().min(1) }))
     .optional(),
@@ -86,6 +93,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // Auto-assign to General project if no project selected (top-level tasks only)
+  let resolvedProjectId = taskData.projectId;
+  if (!resolvedProjectId && !taskData.parentId) {
+    const generalProject = await prisma.project.findFirst({
+      where: { orgId, name: "General" },
+      select: { id: true },
+    });
+    if (generalProject) {
+      resolvedProjectId = generalProject.id;
+    } else {
+      const created = await prisma.project.create({
+        data: { orgId, name: "General", color: "#6366f1", status: "ACTIVE" },
+        select: { id: true },
+      });
+      resolvedProjectId = created.id;
+    }
+    taskData.projectId = resolvedProjectId;
+  }
+
   const task = await prisma.task.create({
     data: {
       ...taskData,
@@ -105,11 +131,51 @@ export async function POST(req: NextRequest) {
     },
     include: {
       executorContact: {
-        select: { id: true, name: true, phone: true, avatarUrl: true },
+        select: { id: true, name: true, phone: true, avatarUrl: true, magicToken: true },
       },
       subtasks: true,
     },
   });
+
+  // Send WhatsApp notification to executor if assigned
+  if (task.executorContact?.phone) {
+    try {
+      const contact = task.executorContact;
+      let magicToken = contact.magicToken;
+      if (!magicToken) {
+        magicToken = nanoid(32);
+        await prisma.contact.update({
+          where: { id: contact.id },
+          data: { magicToken },
+        });
+      }
+      const magicLink = `${APP_URL}/view/${magicToken}`;
+
+      const subtaskList = task.subtasks.map((s, i) => ({
+        index: i + 1,
+        title: s.title,
+        status: s.status,
+      }));
+      const msg = formatReminderMessage(
+        task.title,
+        subtaskList,
+        task.deadline,
+        task.importance,
+        magicLink
+      );
+
+      const waSession = await prisma.whatsAppSession.findUnique({
+        where: { orgId },
+        select: { status: true },
+      });
+      if (waSession?.status === "CONNECTED") {
+        const phone = contact.phone!.replace(/\D/g, "");
+        await baileysManager.sendMessage(orgId, phone, msg);
+      }
+    } catch (err) {
+      console.error("[tasks/POST] WhatsApp notification failed:", err);
+    }
+  }
 
   return NextResponse.json(task, { status: 201 });
 }

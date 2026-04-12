@@ -44,19 +44,45 @@ export async function PATCH(
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const body = await req.json();
+  const { memberContactIds, ...rest } = body;
+
+  // Update project fields
   const updated = await prisma.project.update({
     where: { id: params.projectId },
     data: {
-      name: body.name,
-      description: body.description,
-      color: body.color,
-      status: body.status,
-      startDate: body.startDate ? new Date(body.startDate) : undefined,
-      endDate: body.endDate ? new Date(body.endDate) : undefined,
+      name: rest.name,
+      description: rest.description,
+      color: rest.color,
+      status: rest.status,
+      taskVisibility: rest.taskVisibility,
+      taskCreation: rest.taskCreation,
+      startDate: rest.startDate ? new Date(rest.startDate) : undefined,
+      endDate: rest.endDate ? new Date(rest.endDate) : undefined,
     },
   });
 
-  return NextResponse.json(updated);
+  // If memberContactIds provided, sync team members
+  if (Array.isArray(memberContactIds)) {
+    // Delete all current members and recreate
+    await prisma.projectMember.deleteMany({ where: { projectId: params.projectId } });
+    if (memberContactIds.length > 0) {
+      await prisma.projectMember.createMany({
+        data: memberContactIds.map((contactId: string) => ({
+          projectId: params.projectId,
+          contactId,
+        })),
+        skipDuplicates: true,
+      });
+    }
+  }
+
+  // Return updated project with members
+  const withMembers = await prisma.project.findUnique({
+    where: { id: params.projectId },
+    include: { members: { include: { contact: { select: { id: true, name: true, avatarUrl: true, email: true } } } } },
+  });
+
+  return NextResponse.json(withMembers);
 }
 
 export async function DELETE(
