@@ -64,11 +64,17 @@ export default async function ProjectDetailPage({
     orderBy: [{ importance: "asc" }, { deadline: "asc" }],
   });
 
-  const contacts = await prisma.contact.findMany({
-    where: { orgId },
-    select: { id: true, name: true, phone: true, department: true, avatarUrl: true },
-    orderBy: { name: "asc" },
-  });
+  const [contacts, currentUser] = await Promise.all([
+    prisma.contact.findMany({
+      where: { orgId },
+      select: { id: true, name: true, phone: true, department: true, avatarUrl: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { name: true, email: true, phone: true },
+    }),
+  ]);
 
   return (
     <ProjectDetailClient
@@ -100,6 +106,7 @@ export default async function ProjectDetailPage({
       }))}
       contacts={contacts}
       isAdmin={!!isAdmin}
+      currentUser={currentUser ? { ...currentUser, name: currentUser.name ?? "Me" } : undefined}
     />
   );
 }

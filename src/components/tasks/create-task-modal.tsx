@@ -10,6 +10,7 @@ interface CreateTaskModalProps {
   onCreated: (task: any) => void;
   teamMemberIds?: string[]; // contact IDs who are team members
   taskCreation?: string;    // "ANYONE" | "TEAM_ONLY"
+  currentUser?: { name: string; email: string; phone?: string | null };
 }
 
 interface Contact {
@@ -33,6 +34,7 @@ export default function CreateTaskModal({
   onCreated,
   teamMemberIds,
   taskCreation = "ANYONE",
+  currentUser,
 }: CreateTaskModalProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -46,6 +48,7 @@ export default function CreateTaskModal({
   const [recurringFrequency, setRecurringFrequency] = useState("WEEKLY");
   const [recurringDays, setRecurringDays] = useState<number[]>([]);
   const [recurringMonthDay, setRecurringMonthDay] = useState(1);
+  const [selfAssign, setSelfAssign] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -99,7 +102,8 @@ export default function CreateTaskModal({
           importance,
           eventType,
           deadline: deadline || undefined,
-          executorContactId: executorContactId || undefined,
+          executorContactId: !selfAssign ? (executorContactId || undefined) : undefined,
+          selfAssign: selfAssign || undefined,
           projectId: selectedProjectId || undefined,
           parentId,
           subtasks: subtaskTitles
@@ -311,47 +315,71 @@ export default function CreateTaskModal({
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               Assign to (executor)
             </label>
-            <input
-              type="text"
-              value={contactSearch}
-              onChange={(e) => setContactSearch(e.target.value)}
-              placeholder="Search contacts..."
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 mb-2"
-            />
-            {contactSearch && (
-              <div className="border border-gray-200 rounded-xl overflow-hidden max-h-36 overflow-y-auto">
-                {filteredContacts.length === 0 ? (
-                  <p className="text-sm text-gray-400 px-4 py-3">No contacts found</p>
-                ) : (
-                  filteredContacts.map((c) => (
-                    <button
-                      key={c.id}
-                      onClick={() => {
-                        setExecutorContactId(c.id);
-                        setContactSearch(c.name);
-                      }}
-                      className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-left transition-colors ${
-                        executorContactId === c.id ? "bg-primary-50" : ""
-                      }`}
-                    >
-                      <div className="w-7 h-7 bg-primary-100 rounded-full flex items-center justify-center text-primary-700 text-xs font-medium flex-shrink-0">
-                        {c.name[0].toUpperCase()}
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{c.name}</div>
-                        {c.phone && (
-                          <div className="text-xs text-gray-400">{c.phone}</div>
-                        )}
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
+            {currentUser && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelfAssign((prev) => !prev);
+                  setExecutorContactId("");
+                  setContactSearch("");
+                }}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm border mb-2 transition-colors ${
+                  selfAssign
+                    ? "bg-primary-50 border-primary-500 text-primary-700 font-medium"
+                    : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                <div className="w-6 h-6 bg-primary-100 rounded-full flex items-center justify-center text-primary-700 text-xs font-bold">
+                  {currentUser.name[0].toUpperCase()}
+                </div>
+                {selfAssign ? "✓ Assigned to myself" : "Assign to myself"}
+              </button>
             )}
-            {executorContactId && !contactSearch.startsWith(contacts.find(c => c.id === executorContactId)?.name ?? "__NEVER__") && (
-              <p className="text-xs text-primary-600 mt-1">
-                ✓ {contacts.find((c) => c.id === executorContactId)?.name} assigned
-              </p>
+            {!selfAssign && (
+              <>
+                <input
+                  type="text"
+                  value={contactSearch}
+                  onChange={(e) => setContactSearch(e.target.value)}
+                  placeholder="Search contacts..."
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 mb-2"
+                />
+                {contactSearch && (
+                  <div className="border border-gray-200 rounded-xl overflow-hidden max-h-36 overflow-y-auto">
+                    {filteredContacts.length === 0 ? (
+                      <p className="text-sm text-gray-400 px-4 py-3">No contacts found</p>
+                    ) : (
+                      filteredContacts.map((c) => (
+                        <button
+                          key={c.id}
+                          onClick={() => {
+                            setExecutorContactId(c.id);
+                            setContactSearch(c.name);
+                          }}
+                          className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-left transition-colors ${
+                            executorContactId === c.id ? "bg-primary-50" : ""
+                          }`}
+                        >
+                          <div className="w-7 h-7 bg-primary-100 rounded-full flex items-center justify-center text-primary-700 text-xs font-medium flex-shrink-0">
+                            {c.name[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{c.name}</div>
+                            {c.phone && (
+                              <div className="text-xs text-gray-400">{c.phone}</div>
+                            )}
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+                {executorContactId && !contactSearch.startsWith(contacts.find(c => c.id === executorContactId)?.name ?? "__NEVER__") && (
+                  <p className="text-xs text-primary-600 mt-1">
+                    ✓ {contacts.find((c) => c.id === executorContactId)?.name} assigned
+                  </p>
+                )}
+              </>
             )}
           </div>
 

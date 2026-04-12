@@ -50,9 +50,10 @@ interface ProjectDetailClientProps {
   initialTasks: Task[];
   contacts: Array<{ id: string; name: string; phone: string | null; department: string | null; avatarUrl: string | null }>;
   isAdmin?: boolean;
+  currentUser?: { name: string; email: string; phone?: string | null };
 }
 
-const COLORS = ["#6366f1","#8b5cf6","#ec4899","#ef4444","#f97316","#eab308","#22c55e","#14b8a6","#06b6d4","#3b82f6"];
+const COLORS =["#6366f1","#8b5cf6","#ec4899","#ef4444","#f97316","#eab308","#22c55e","#14b8a6","#06b6d4","#3b82f6"];
 
 export default function ProjectDetailClient({
   orgId,
@@ -60,6 +61,7 @@ export default function ProjectDetailClient({
   initialTasks,
   contacts,
   isAdmin,
+  currentUser,
 }: ProjectDetailClientProps) {
   const [project, setProject] = useState(initialProject);
   const [tasks, setTasks] = useState(initialTasks);
@@ -361,6 +363,7 @@ export default function ProjectDetailClient({
           onCreated={(task) => { setTasks((prev) => [task, ...prev]); setShowCreateTask(false); }}
           teamMemberIds={(project.members ?? []).map((m) => m.contactId)}
           taskCreation={(project as any).taskCreation ?? "ANYONE"}
+          currentUser={currentUser}
         />
       )}
 

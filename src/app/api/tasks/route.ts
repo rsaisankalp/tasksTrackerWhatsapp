@@ -19,6 +19,7 @@ const CreateTaskSchema = z.object({
     .enum(["ONE_TIME", "ONE_TIME_EVENT", "REGULAR", "REPEATABLE"])
     .default("ONE_TIME"),
   executorContactId: z.string().optional(),
+  selfAssign: z.boolean().optional(), // assign to the logged-in user (find/create contact)
   deadline: z.string().optional(),
   reminderHour: z.number().optional(),
   reminderInterval: z.number().optional(),
@@ -84,7 +85,42 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { orgId, subtasks, deadline, ...taskData } = parsed.data;
+  const { orgId, subtasks, deadline, selfAssign, ...taskData } = parsed.data;
+
+  // Resolve selfAssign → find or create a Contact for the current user
+  if (selfAssign) {
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { name: true, email: true, phone: true },
+    });
+    if (user) {
+      // Try to find existing contact by email
+      let contact = await prisma.contact.findFirst({
+        where: { orgId, email: user.email },
+        select: { id: true },
+      });
+      if (!contact && user.phone) {
+        contact = await prisma.contact.findFirst({
+          where: { orgId, phone: user.phone },
+          select: { id: true },
+        });
+      }
+      if (!contact) {
+        // Create one
+        contact = await prisma.contact.create({
+          data: {
+            orgId,
+            name: user.name ?? "Me",
+            email: user.email,
+            phone: user.phone ?? null,
+            trustLevel: "INTERNAL",
+          },
+          select: { id: true },
+        });
+      }
+      taskData.executorContactId = contact.id;
+    }
+  }
 
   const membership = await prisma.orgMember.findUnique({
     where: { orgId_userId: { orgId, userId: session.user.id } },
