@@ -18,6 +18,11 @@ export default async function DashboardPage({
 
   if (!orgId) redirect("/onboarding");
 
+  const currentUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { name: true, email: true, phone: true },
+  });
+
   // Stats
   const [taskStats, projects, recentTasks] = await Promise.all([
     prisma.task.groupBy({
@@ -70,6 +75,7 @@ export default async function DashboardPage({
         createdAt: t.createdAt.toISOString(),
         updatedAt: t.updatedAt.toISOString(),
       }))}
+      currentUser={currentUser ? { ...currentUser, name: currentUser.name ?? "Me" } : undefined}
     />
   );
 }

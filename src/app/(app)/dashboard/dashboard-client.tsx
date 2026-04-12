@@ -11,6 +11,7 @@ interface DashboardProps {
   stats: { todo: number; inProgress: number; blocked: number; done: number };
   projects: any[];
   tasks: any[];
+  currentUser?: { name: string; email: string; phone?: string | null };
 }
 
 const importanceConfig: Record<string, { label: string; color: string; dot: string }> = {
@@ -20,7 +21,7 @@ const importanceConfig: Record<string, { label: string; color: string; dot: stri
   LOW: { label: "Low", color: "bg-green-100 text-green-700 border-green-200", dot: "bg-green-500" },
 };
 
-export default function DashboardClient({ orgId, stats, projects, tasks }: DashboardProps) {
+export default function DashboardClient({ orgId, stats, projects, tasks, currentUser }: DashboardProps) {
   const [showCreateTask, setShowCreateTask] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string>("ALL");
 
@@ -200,6 +201,7 @@ export default function DashboardClient({ orgId, stats, projects, tasks }: Dashb
             setShowCreateTask(false);
             window.location.reload();
           }}
+          currentUser={currentUser}
         />
       )}
     </div>
