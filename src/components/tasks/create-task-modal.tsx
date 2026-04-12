@@ -227,7 +227,7 @@ export default function CreateTaskModal({
                     <button
                       key={f}
                       type="button"
-                      onClick={() => { setRecurringFrequency(f); setRecurringDays([]); }}
+                      onClick={() => { setRecurringFrequency(f); if (f !== "WEEKLY") setRecurringDays([]); }}
                       className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
                         recurringFrequency === f
                           ? "bg-primary-600 text-white border-primary-600"

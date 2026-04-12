@@ -86,6 +86,7 @@ export default async function ProjectDetailPage({
         color: project.color,
         status: project.status,
         taskVisibility: project.taskVisibility,
+        taskCreation: project.taskCreation,
         startDate: project.startDate?.toISOString() ?? null,
         endDate: project.endDate?.toISOString() ?? null,
         createdAt: project.createdAt.toISOString(),
