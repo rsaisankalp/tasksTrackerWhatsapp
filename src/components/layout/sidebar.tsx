@@ -76,7 +76,7 @@ export default function Sidebar({ orgs, user }: SidebarProps) {
   }
 
   return (
-    <aside className="w-60 flex-shrink-0 bg-primary-950 flex flex-col h-screen">
+    <aside className="hidden md:flex w-60 flex-shrink-0 bg-primary-950 flex-col h-screen">
       {/* Org Switcher */}
       <div className="p-4 border-b border-white/5 relative">
         <button

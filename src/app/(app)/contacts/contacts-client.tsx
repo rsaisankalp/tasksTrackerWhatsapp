@@ -35,6 +35,9 @@ export default function ContactsClient({
   const [editContact, setEditContact] = useState<Contact | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showBulkImport, setShowBulkImport] = useState(false);
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
 
   // Form state
   const [form, setForm] = useState({
@@ -45,6 +48,7 @@ export default function ContactsClient({
     department: "",
     trustLevel: "INTERNAL" as "INTERNAL" | "TRUSTED" | "EXTERNAL",
   });
+  const [phoneCountryCode, setPhoneCountryCode] = useState("+91");
 
   const filteredContacts = contacts.filter(
     (c) =>
@@ -55,17 +59,27 @@ export default function ContactsClient({
       c.role?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const parsePhone = (raw: string): { cc: string; num: string } => {
+    const cleaned = raw.replace(/\s/g, "");
+    if (cleaned.startsWith("+91")) return { cc: "+91", num: cleaned.slice(3) };
+    if (cleaned.startsWith("91") && cleaned.length > 10) return { cc: "+91", num: cleaned.slice(2) };
+    return { cc: "+91", num: cleaned };
+  };
+
   const openCreate = () => {
     setForm({ name: "", phone: "", email: "", role: "", department: "", trustLevel: "INTERNAL" });
+    setPhoneCountryCode("+91");
     setEditContact(null);
     setError("");
     setShowCreate(true);
   };
 
   const openEdit = (c: Contact) => {
+    const { cc, num } = parsePhone(c.phone ?? "");
+    setPhoneCountryCode(cc);
     setForm({
       name: c.name,
-      phone: c.phone ?? "",
+      phone: num,
       email: c.email ?? "",
       role: c.role ?? "",
       department: c.department ?? "",
@@ -80,12 +94,16 @@ export default function ContactsClient({
     if (!form.name.trim()) return;
     setLoading(true);
     setError("");
+    const fullPhone = form.phone.trim()
+      ? `${phoneCountryCode}${form.phone.trim()}`
+      : "";
+    const submitData = { ...form, phone: fullPhone || undefined };
     try {
       if (editContact) {
         const res = await fetch(`/api/contacts/${editContact.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
+          body: JSON.stringify(submitData),
         });
         if (!res.ok) throw new Error("Failed to update");
         const updated = await res.json();
@@ -98,7 +116,7 @@ export default function ContactsClient({
         const res = await fetch(`/api/contacts?orgId=${orgId}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ orgId, ...form }),
+          body: JSON.stringify({ orgId, ...submitData }),
         });
         if (!res.ok) throw new Error("Failed to create");
         const contact = await res.json();
@@ -118,6 +136,55 @@ export default function ContactsClient({
     setContacts((prev) => prev.filter((c) => c.id !== id));
   };
 
+  const downloadSampleCSV = () => {
+    const csv = [
+      "name,phone,email,role,department,trustLevel",
+      "Rahul Sharma,9876543210,rahul@example.com,Manager,Sales,INTERNAL",
+      "Priya Patel,+919988776655,priya@example.com,Executive,HR,TRUSTED",
+      "John Smith,+14155550100,john@example.com,Partner,,EXTERNAL",
+    ].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "contacts-sample.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCSVImport = async (file: File) => {
+    setBulkLoading(true);
+    setBulkResult(null);
+    try {
+      const text = await file.text();
+      const lines = text.trim().split("\n");
+      const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
+      const rows = lines.slice(1).map((line) => {
+        const vals = line.split(",").map((v) => v.trim().replace(/^"|"$/g, ""));
+        const obj: Record<string, string> = {};
+        headers.forEach((h, i) => { obj[h] = vals[i] ?? ""; });
+        return obj;
+      }).filter((r) => r.name);
+
+      const res = await fetch(`/api/contacts/bulk?orgId=${orgId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contacts: rows }),
+      });
+      const result = await res.json();
+      setBulkResult(result);
+      if (result.success > 0) {
+        // Refresh contacts list
+        const updated = await fetch(`/api/contacts?orgId=${orgId}`).then((r) => r.json());
+        if (Array.isArray(updated)) setContacts(updated);
+      }
+    } catch (e: any) {
+      setBulkResult({ success: 0, failed: 1, errors: [e.message] });
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -125,15 +192,26 @@ export default function ContactsClient({
           <h1 className="text-2xl font-bold text-gray-900">Contacts</h1>
           <p className="text-gray-500 text-sm mt-0.5">{contacts.length} executor{contacts.length !== 1 ? "s" : ""} in your org</p>
         </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-primary-700 transition-colors shadow-sm"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Add Contact
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setShowBulkImport(true); setBulkResult(null); }}
+            className="flex items-center gap-2 border border-gray-200 text-gray-600 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Import CSV
+          </button>
+          <button
+            onClick={openCreate}
+            className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-primary-700 transition-colors shadow-sm"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Contact
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -282,13 +360,26 @@ export default function ContactsClient({
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Phone</label>
-                  <input
-                    type="tel"
-                    value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                    placeholder="+91 9876543210"
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
+                  <div className="flex gap-2">
+                    <select
+                      value={phoneCountryCode}
+                      onChange={(e) => setPhoneCountryCode(e.target.value)}
+                      className="border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white w-24"
+                    >
+                      <option value="+91">🇮🇳 +91</option>
+                      <option value="+1">🇺🇸 +1</option>
+                      <option value="+44">🇬🇧 +44</option>
+                      <option value="+971">🇦🇪 +971</option>
+                      <option value="+65">🇸🇬 +65</option>
+                    </select>
+                    <input
+                      type="tel"
+                      value={form.phone}
+                      onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                      placeholder="9876543210"
+                      className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
@@ -358,6 +449,67 @@ export default function ContactsClient({
                 className="flex-1 bg-primary-600 text-white py-3 rounded-xl text-sm font-medium hover:bg-primary-700 disabled:opacity-50 transition-colors"
               >
                 {loading ? "Saving..." : editContact ? "Update" : "Add Contact"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Import Modal */}
+      {showBulkImport && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-900">Import Contacts from CSV</h2>
+              <button onClick={() => setShowBulkImport(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-600 space-y-1">
+                <p className="font-medium text-gray-800">CSV format:</p>
+                <p><code className="text-xs bg-white px-1.5 py-0.5 rounded border border-gray-200">name, phone, email, role, department, trustLevel</code></p>
+                <p className="text-xs text-gray-500">• Phone: 10-digit numbers default to +91 India<br/>• trustLevel: INTERNAL / TRUSTED / EXTERNAL<br/>• Only name is required</p>
+              </div>
+              <button
+                onClick={downloadSampleCSV}
+                className="flex items-center gap-2 text-sm text-primary-600 hover:text-primary-700 font-medium"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Download sample CSV
+              </button>
+              <label className="block">
+                <span className="block text-sm font-medium text-gray-700 mb-1.5">Upload CSV file</span>
+                <input
+                  type="file"
+                  accept=".csv"
+                  disabled={bulkLoading}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleCSVImport(file);
+                  }}
+                  className="block w-full text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:bg-primary-50 file:text-primary-700 file:font-medium hover:file:bg-primary-100 cursor-pointer border border-dashed border-gray-300 rounded-xl p-3"
+                />
+              </label>
+              {bulkLoading && (
+                <p className="text-sm text-gray-500 text-center">Importing...</p>
+              )}
+              {bulkResult && (
+                <div className={`rounded-xl p-4 text-sm ${bulkResult.failed === 0 ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>
+                  <p className="font-medium">✓ {bulkResult.success} imported{bulkResult.failed > 0 ? `, ${bulkResult.failed} failed` : ""}</p>
+                  {bulkResult.errors.slice(0, 5).map((e, i) => (
+                    <p key={i} className="text-xs mt-1 opacity-80">{e}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100">
+              <button onClick={() => setShowBulkImport(false)} className="w-full border border-gray-200 text-gray-600 py-3 rounded-xl text-sm hover:bg-gray-50 transition-colors">
+                Close
               </button>
             </div>
           </div>

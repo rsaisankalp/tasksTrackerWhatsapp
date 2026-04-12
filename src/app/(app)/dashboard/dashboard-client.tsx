@@ -37,7 +37,7 @@ export default function DashboardClient({ orgId, stats, projects, tasks }: Dashb
   ).length;
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
@@ -63,11 +63,11 @@ export default function DashboardClient({ orgId, stats, projects, tasks }: Dashb
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        <div className="col-span-2 lg:col-span-1 bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-          <div className="text-3xl font-bold text-gray-900">{completionRate}%</div>
-          <div className="text-sm text-gray-500 mt-1">Completion rate</div>
-          <div className="mt-3 bg-gray-100 rounded-full h-1.5">
+      <div className="flex gap-3 mb-6 overflow-x-auto pb-1 -mx-4 px-4 md:mx-0 md:px-0 md:grid md:grid-cols-5 md:gap-4 md:overflow-visible md:pb-0 md:mb-8">
+        <div className="flex-shrink-0 w-36 md:w-auto md:col-span-1 bg-white border border-gray-100 rounded-2xl p-4 md:p-5 shadow-sm">
+          <div className="text-2xl md:text-3xl font-bold text-gray-900">{completionRate}%</div>
+          <div className="text-xs md:text-sm text-gray-500 mt-1">Completion</div>
+          <div className="mt-2 bg-gray-100 rounded-full h-1.5">
             <div
               className="bg-primary-500 h-1.5 rounded-full transition-all"
               style={{ width: `${completionRate}%` }}
@@ -80,9 +80,9 @@ export default function DashboardClient({ orgId, stats, projects, tasks }: Dashb
           { label: "Blocked", value: stats.blocked, color: "text-red-600", bg: "bg-red-50" },
           { label: "Done", value: stats.done, color: "text-green-600", bg: "bg-green-50" },
         ].map((stat) => (
-          <div key={stat.label} className={`${stat.bg} border border-gray-100 rounded-2xl p-5 shadow-sm`}>
-            <div className={`text-3xl font-bold ${stat.color}`}>{stat.value}</div>
-            <div className="text-sm text-gray-500 mt-1">{stat.label}</div>
+          <div key={stat.label} className={`flex-shrink-0 w-28 md:w-auto ${stat.bg} border border-gray-100 rounded-2xl p-4 md:p-5 shadow-sm`}>
+            <div className={`text-2xl md:text-3xl font-bold ${stat.color}`}>{stat.value}</div>
+            <div className="text-xs md:text-sm text-gray-500 mt-1">{stat.label}</div>
           </div>
         ))}
       </div>
@@ -105,14 +105,14 @@ export default function DashboardClient({ orgId, stats, projects, tasks }: Dashb
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Tasks column */}
         <div className="xl:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Active Tasks</h2>
-            <div className="flex gap-1.5">
+          <div className="flex items-center justify-between mb-4 gap-2">
+            <h2 className="text-lg font-semibold text-gray-900 flex-shrink-0">Active Tasks</h2>
+            <div className="flex gap-1 overflow-x-auto pb-0.5 max-w-full">
               {["ALL", "EMERGENCY", "HIGH", "IN_PROGRESS", "BLOCKED"].map((f) => (
                 <button
                   key={f}
                   onClick={() => setActiveFilter(f)}
-                  className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                  className={`flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
                     activeFilter === f
                       ? "bg-primary-100 text-primary-700"
                       : "text-gray-500 hover:bg-gray-100"

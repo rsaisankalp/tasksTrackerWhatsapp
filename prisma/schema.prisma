@@ -19,11 +19,12 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts     Account[]
-  sessions     Session[]
-  memberships  OrgMember[]
-  ownedOrgs    Organization[]  @relation("OrgOwner")
-  createdTasks Task[]          @relation("TaskCreator")
+  accounts      Account[]
+  sessions      Session[]
+  memberships   OrgMember[]
+  ownedOrgs     Organization[]  @relation("OrgOwner")
+  createdTasks  Task[]          @relation("TaskCreator")
+  inviteCodes   InviteCode[]
 }
 
 model Account {
@@ -95,6 +96,7 @@ model Organization {
   reminders       Reminder[]
   taskComments    TaskComment[]
   whatsappSession WhatsAppSession?
+  inviteCodes     InviteCode[]
 }
 
 model OrgMember {
@@ -152,8 +154,12 @@ model Contact {
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
-  org            Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  assignedTasks  Task[]       @relation("TaskExecutor")
+  org                Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  assignedTasks      Task[]          @relation("TaskExecutor")
+  projectMemberships ProjectMember[]
+
+  // Magic link token for passwordless dashboard access via WhatsApp
+  magicToken         String?         @unique
 
   @@index([orgId])
   @@index([phone])
@@ -168,21 +174,36 @@ enum TrustLevel {
 // ─── Projects ─────────────────────────────────────────────────────────────────
 
 model Project {
-  id          String        @id @default(cuid())
-  orgId       String
-  name        String
-  description String?
-  color       String        @default("#6366f1")
-  status      ProjectStatus @default(ACTIVE)
-  startDate   DateTime?
-  endDate     DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id             String        @id @default(cuid())
+  orgId          String
+  name           String
+  description    String?
+  color          String        @default("#6366f1")
+  status         ProjectStatus @default(ACTIVE)
+  taskVisibility  String        @default("ALL")   // "ALL" or "OWN_ONLY"
+  taskCreation    String        @default("ANYONE") // "ANYONE" or "TEAM_ONLY"
+  startDate      DateTime?
+  endDate        DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
-  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  tasks Task[]
+  org     Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  tasks   Task[]
+  members ProjectMember[]
 
   @@index([orgId])
+}
+
+model ProjectMember {
+  id        String @id @default(cuid())
+  projectId String
+  contactId String
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, contactId])
+  @@index([projectId])
 }
 
 enum ProjectStatus {
@@ -215,6 +236,10 @@ model Task {
   reminderHour     Int? // For repeatable: time of day to remind (hour 0-23)
   reminderInterval Int? // Override interval in hours
   daysBeforeEvent  Int? // For ONE_TIME_EVENT: remind N days before
+
+  // Recurring schedule
+  recurringFrequency String? // DAILY | WEEKLY | MONTHLY
+  recurringDays      Int[]   // For WEEKLY: days of week (0=Sun…6=Sat); for MONTHLY: day of month
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -282,6 +307,24 @@ enum ReminderStatus {
   SENT
   FAILED
   ACKNOWLEDGED
+}
+
+// ─── Invite Codes ─────────────────────────────────────────────────────────────
+
+model InviteCode {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  orgId       String
+  createdById String
+  maxUses     Int       @default(10)
+  usedCount   Int       @default(0)
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdBy User         @relation(fields: [createdById], references: [id])
+
+  @@index([orgId])
 }
 
 // ─── Task Comments ────────────────────────────────────────────────────────────

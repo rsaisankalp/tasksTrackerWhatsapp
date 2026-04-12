@@ -221,6 +221,224 @@ function simpleFallback(message: string, subtasks: SubtaskContext[]): WhatsAppPa
   };
 }
 
+export interface GroupCommandResult {
+  // What the user wants
+  intent: "list_tasks" | "task_detail" | "status" | "blocked" | "urgent" | "remind" | "overdue" | "create_task" | "help" | "stats_query" | "update_task";
+  // For task_detail, remind, update_task: which task name to search for
+  taskSearch: string | null;
+  // For update_task: what field to update and what value to set
+  updateField: "assign" | "status" | "deadline" | "priority" | null;
+  updateValue: string | null;
+}
+
+export interface TaskCreationResult {
+  title: string;
+  executorName: string | null;   // name of the person to assign to
+  deadlineDays: number | null;   // days from today (e.g. 3 = 3 days from now)
+  deadlineDate: string | null;   // explicit date if mentioned (ISO format YYYY-MM-DD)
+  importance: "EMERGENCY" | "HIGH" | "MID" | "LOW";
+  description: string | null;
+  // If key details are missing, set this to ask the user a follow-up question
+  followUpQuestion: string | null;
+}
+
+const TASK_CREATION_PROMPT = `You are a task management assistant. Extract task details from a natural language message.
+Return a JSON object with:
+- title: concise task title (extract the core action/task, e.g. "Send honorarium list"). Required — if you cannot determine a meaningful title, set followUpQuestion.
+- executorName: name of the person who should do it (null if not mentioned or if it's "me"/"myself"/"I")
+- deadlineDays: number of days from today (e.g. "in 3 days" → 3, "by tomorrow" → 1, "next week" → 7, null if not mentioned)
+- deadlineDate: explicit date in YYYY-MM-DD if a specific date is mentioned (null otherwise)
+- importance: "EMERGENCY", "HIGH", "MID", or "LOW" based on urgency words ("urgent"/"asap"/"emergency" → EMERGENCY, "important"/"high priority" → HIGH, default → "MID")
+- description: any additional context or details (null if none)
+- followUpQuestion: if the title is unclear or the message is too vague to create a task (e.g. just "create task" or "add a reminder"), set this to a concise question asking for missing details. Otherwise null.
+
+Rules:
+- For "remind X to do Y" or "ask X to do Y" → executor is X, title is Y
+- For "create a task for X" → executor is X
+- Extract the meaningful task action as the title, not the whole sentence
+- Deadline and executor are optional — only set followUpQuestion if the title itself is unclear
+- Today's date: ${new Date().toISOString().split("T")[0]}
+
+Return ONLY JSON. No markdown.`;
+
+export async function parseTaskCreation(message: string): Promise<TaskCreationResult> {
+  const apiKey = getNextApiKey();
+  const rawTitle = message.replace(/^(create|add|new)\s+(a\s+)?(task|reminder)(\s+to|\s+for)?\s*/i, "").trim();
+  const fallback: TaskCreationResult = {
+    title: rawTitle || message,
+    executorName: null,
+    deadlineDays: null,
+    deadlineDate: null,
+    importance: "MID",
+    description: null,
+    followUpQuestion: rawTitle ? null : "What should the task be called? Who should do it and by when?",
+  };
+
+  if (!apiKey) return fallback;
+
+  for (let attempt = 0; attempt < Math.max(1, API_KEYS.length); attempt++) {
+    const currentKey = API_KEYS[(keyIndex + attempt) % API_KEYS.length];
+    try {
+      const genAI = new GoogleGenerativeAI(currentKey);
+      const model = genAI.getGenerativeModel({
+        model: MODEL_NAME,
+        generationConfig: { responseMimeType: "application/json" },
+        systemInstruction: TASK_CREATION_PROMPT,
+      });
+      const result = await model.generateContent(`Message: "${message}"\n\nReturn JSON only.`);
+      const text = result.response.text().trim();
+      const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+      const parsed = JSON.parse(cleaned) as TaskCreationResult;
+      parsed.importance = parsed.importance ?? "MID";
+      parsed.followUpQuestion = parsed.followUpQuestion ?? null;
+      return parsed;
+    } catch (e: any) {
+      const isQuotaError = e?.status === 429 || e?.message?.includes("quota") || e?.message?.includes("rate");
+      if (isQuotaError && attempt < API_KEYS.length - 1) { continue; }
+      console.error("[Gemini] parseTaskCreation error:", e?.message ?? e);
+      break;
+    }
+  }
+  return fallback;
+}
+
+const GROUP_COMMAND_PROMPT = `You are a WhatsApp group bot for a task management system.
+Classify the user's message into one of these intents:
+- list_tasks: user wants to see all pending/active tasks (any variation: "show tasks", "what's pending", "open tasks", "active tasks", "kya kya pending hai", tasks by project, etc.)
+- task_detail: user wants details about a specific task (e.g. "tell me about X", "X ka status", "show X", "details of X"). Also use this if the user's message appears to be a task name from the provided list.
+- status: user wants a high-level dashboard or statistics summary (e.g. "status", "overview", "how are we doing", "completion rate", "how many done", "statistics", "how many tasks per person")
+- blocked: user wants to see blocked/stuck tasks
+- urgent: user wants high-priority/emergency/overdue tasks or things that need attention ("what needs attention", "urgent", "critical", "important", "what should I focus on", "what to prioritize")
+- remind: user wants to follow up on or send a reminder for a specific task (e.g. "remind X about Y", "follow up on Y", "send reminder for Y", "chase Y", "ping executor of Y")
+- overdue: user wants to see tasks that are past their deadline
+- help: user wants to see available commands (e.g. "help", "hi", "what can you do")
+- create_task: user wants to create a new task (e.g. "create task X", "add a task for X", "remind X to do Y", "add task: X", "new task: X")
+- stats_query: user is asking a general question that needs data to answer (e.g. "how many tasks does Swami have?", "which project has most tasks?", "who is most loaded?", "done this week?")
+- update_task: user wants to modify an existing task — assign it to someone, change its status, deadline, or priority. IMPORTANT: if the user is replying to a previous bot message about a task (shown as [Quoted message: ...]), and says something like "assign to X", "assigned to X", "give to X", "mark as done", "change deadline to X", "set priority to X" — use update_task.
+
+Return JSON with:
+- intent: one of the above strings
+- taskSearch: for task_detail, remind, update_task — the task name to search for (null otherwise). If user is replying to a task message, extract the task title from the quoted message.
+- updateField: for update_task only — one of "assign", "status", "deadline", "priority" (null otherwise)
+- updateValue: for update_task only — the new value (e.g. contact name, "DONE", "2026-04-15", "HIGH") (null otherwise)
+
+Return ONLY JSON. No markdown.`;
+
+export async function parseGroupCommand(message: string, taskTitles: string[] = [], quotedBody: string | null = null): Promise<GroupCommandResult> {
+  const fallback = simpleGroupCommandFallback(message);
+
+  const apiKey = getNextApiKey();
+  if (!apiKey) return fallback;
+
+  const taskListContext = taskTitles.length > 0
+    ? `\n\nCurrent tasks in the system:\n${taskTitles.map((t, i) => `${i + 1}. ${t}`).join("\n")}`
+    : "";
+
+  const quotedContext = quotedBody
+    ? `\n\n[Quoted message the user is replying to: "${quotedBody.substring(0, 300)}"]\n`
+    : "";
+
+  for (let attempt = 0; attempt < Math.max(1, API_KEYS.length); attempt++) {
+    const currentKey = API_KEYS[(keyIndex + attempt) % API_KEYS.length];
+    try {
+      const genAI = new GoogleGenerativeAI(currentKey);
+      const model = genAI.getGenerativeModel({
+        model: MODEL_NAME,
+        generationConfig: { responseMimeType: "application/json" },
+        systemInstruction: GROUP_COMMAND_PROMPT,
+      });
+
+      const result = await model.generateContent(`${quotedContext}User message: "${message}"${taskListContext}\n\nReturn JSON only.`);
+      const text = result.response.text().trim();
+      const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+      const parsed = JSON.parse(cleaned) as GroupCommandResult;
+      parsed.taskSearch = parsed.taskSearch ?? null;
+      parsed.updateField = parsed.updateField ?? null;
+      parsed.updateValue = parsed.updateValue ?? null;
+      return parsed;
+    } catch (e: any) {
+      const isQuotaError =
+        e?.status === 429 || e?.message?.includes("quota") || e?.message?.includes("rate");
+      if (isQuotaError && attempt < API_KEYS.length - 1) {
+        console.warn(`[Gemini] Key ${attempt + 1} quota exceeded, rotating...`);
+        continue;
+      }
+      console.error("[Gemini] parseGroupCommand error, using fallback:", e?.message ?? e);
+      break;
+    }
+  }
+
+  return fallback;
+}
+
+function simpleGroupCommandFallback(message: string): GroupCommandResult {
+  const lower = message.toLowerCase().trim();
+  const base = { updateField: null as GroupCommandResult["updateField"], updateValue: null };
+
+  if (lower.includes("assign") || lower.includes("give to") || lower.includes("assigned to")) {
+    const val = lower.replace(/^(assign(ed)?\s+(to|it\s+to)|give\s+to)\s*/i, "").trim();
+    return { intent: "update_task", taskSearch: null, updateField: "assign", updateValue: val || null };
+  }
+  if (lower.includes("overdue") || lower.includes("late") || lower.includes("past deadline") || lower.includes("missed deadline")) {
+    return { intent: "overdue", taskSearch: null, ...base };
+  }
+  if (lower.includes("remind") || lower.includes("follow up") || lower.includes("followup") || lower.includes("chase") || lower.includes("ping")) {
+    const search = lower.replace(/^(remind|follow up on|followup|chase|ping)\s+/i, "").trim();
+    return { intent: "remind", taskSearch: search || null, ...base };
+  }
+  if (lower.includes("block") || lower.includes("stuck")) {
+    return { intent: "blocked", taskSearch: null, ...base };
+  }
+  if (lower.includes("urgent") || lower.includes("atten") || lower.includes("critical") || lower.includes("important") || lower.includes("priority") || lower.includes("focus")) {
+    return { intent: "urgent", taskSearch: null, ...base };
+  }
+  if (lower.includes("status") || lower.includes("summary") || lower.includes("overview") || lower.includes("dashboard")) {
+    return { intent: "status", taskSearch: null, ...base };
+  }
+  if (lower.includes("how many") || lower.includes("statistic") || lower.includes("count") || lower.includes("who has") || lower.includes("which project")) {
+    return { intent: "stats_query", taskSearch: null, ...base };
+  }
+  if (lower.includes("task") || lower.includes("pending") || lower.includes("open") || lower.includes("active")) {
+    if (lower.includes("details") || lower.includes("about") || lower.includes("status of")) {
+      return { intent: "task_detail", taskSearch: lower.replace(/^(task|details of|about|info)\s+/i, "").trim(), ...base };
+    }
+    return { intent: "list_tasks", taskSearch: null, ...base };
+  }
+  if (/^(create|add|new)\s+(a\s+)?(task|reminder)/i.test(lower) || lower.includes("remind") && lower.includes("to ")) {
+    return { intent: "create_task", taskSearch: null, ...base };
+  }
+  if (lower.includes("help") || lower === "hi" || lower === "hello") {
+    return { intent: "help", taskSearch: null, ...base };
+  }
+  return { intent: "stats_query", taskSearch: null, ...base };
+}
+
+export async function answerGroupStatsQuery(question: string, statsContext: string): Promise<string> {
+  const apiKey = getNextApiKey();
+  if (!apiKey) return "❓ Unable to answer — AI not configured.";
+
+  for (let attempt = 0; attempt < Math.max(1, API_KEYS.length); attempt++) {
+    const currentKey = API_KEYS[(keyIndex + attempt) % API_KEYS.length];
+    try {
+      const genAI = new GoogleGenerativeAI(currentKey);
+      const model = genAI.getGenerativeModel({
+        model: MODEL_NAME,
+        systemInstruction: "You are a task management assistant. Answer the user's question using the provided task data. Be concise and use WhatsApp-friendly formatting (bold with *text*, bullet points with •). No markdown headers.",
+      });
+
+      const prompt = `Task data:\n${statsContext}\n\nUser question: "${question}"\n\nAnswer concisely.`;
+      const result = await model.generateContent(prompt);
+      return result.response.text().trim();
+    } catch (e: any) {
+      const isQuotaError = e?.status === 429 || e?.message?.includes("quota") || e?.message?.includes("rate");
+      if (isQuotaError && attempt < API_KEYS.length - 1) { continue; }
+      console.error("[Gemini] answerGroupStatsQuery error:", e?.message ?? e);
+      break;
+    }
+  }
+  return "❓ Couldn't process that query right now.";
+}
+
 // Legacy export for backward compatibility (not used in new webhook)
 export async function parseTaskReply(
   message: string,

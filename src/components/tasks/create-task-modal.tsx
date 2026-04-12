@@ -8,6 +8,8 @@ interface CreateTaskModalProps {
   parentId?: string;
   onClose: () => void;
   onCreated: (task: any) => void;
+  teamMemberIds?: string[]; // contact IDs who are team members
+  taskCreation?: string;    // "ANYONE" | "TEAM_ONLY"
 }
 
 interface Contact {
@@ -29,6 +31,8 @@ export default function CreateTaskModal({
   parentId,
   onClose,
   onCreated,
+  teamMemberIds,
+  taskCreation = "ANYONE",
 }: CreateTaskModalProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -39,6 +43,9 @@ export default function CreateTaskModal({
   const [selectedProjectId, setSelectedProjectId] = useState(projectId ?? "");
   const [subtaskTitles, setSubtaskTitles] = useState<string[]>([]);
   const [newSubtask, setNewSubtask] = useState("");
+  const [recurringFrequency, setRecurringFrequency] = useState("WEEKLY");
+  const [recurringDays, setRecurringDays] = useState<number[]>([]);
+  const [recurringMonthDay, setRecurringMonthDay] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -51,11 +58,22 @@ export default function CreateTaskModal({
       fetch(`/api/projects?orgId=${orgId}`).then((r) => r.json()),
     ]).then(([c, p]) => {
       setContacts(Array.isArray(c) ? c : []);
-      setProjects(Array.isArray(p) ? p : []);
+      const projectList: Project[] = Array.isArray(p) ? p : [];
+      setProjects(projectList);
+      // Default to General project if no projectId prop is set
+      if (!projectId && !selectedProjectId) {
+        const general = projectList.find((pr) => pr.name === "General");
+        if (general) setSelectedProjectId(general.id);
+      }
     });
-  }, [orgId]);
+  }, [orgId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const filteredContacts = contacts.filter(
+  const assignableContacts =
+    taskCreation === "TEAM_ONLY" && teamMemberIds?.length
+      ? contacts.filter((c) => teamMemberIds.includes(c.id))
+      : contacts;
+
+  const filteredContacts = assignableContacts.filter(
     (c) =>
       c.name.toLowerCase().includes(contactSearch.toLowerCase()) ||
       c.phone?.includes(contactSearch) ||
@@ -87,6 +105,14 @@ export default function CreateTaskModal({
           subtasks: subtaskTitles
             .filter((s) => s.trim())
             .map((s) => ({ title: s.trim() })),
+          ...(eventType === "REPEATABLE" ? {
+            recurringFrequency,
+            recurringDays: recurringFrequency === "WEEKLY"
+              ? recurringDays
+              : recurringFrequency === "MONTHLY"
+              ? [recurringMonthDay]
+              : [],
+          } : {}),
         }),
       });
 
@@ -160,7 +186,7 @@ export default function CreateTaskModal({
           </div>
 
           {/* Row: Importance + Event Type */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Importance</label>
               <select
@@ -182,15 +208,76 @@ export default function CreateTaskModal({
                 className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
               >
                 <option value="ONE_TIME">One Time</option>
-                <option value="ONE_TIME_EVENT">Event (One-time)</option>
-                <option value="REGULAR">Regular</option>
-                <option value="REPEATABLE">Repeatable</option>
+                <option value="REPEATABLE">Recurring</option>
               </select>
             </div>
           </div>
 
+          {/* Recurring options */}
+          {eventType === "REPEATABLE" && (
+            <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Frequency</label>
+                <div className="flex gap-2">
+                  {(["DAILY", "WEEKLY", "MONTHLY"] as const).map((f) => (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => { setRecurringFrequency(f); setRecurringDays([]); }}
+                      className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                        recurringFrequency === f
+                          ? "bg-primary-600 text-white border-primary-600"
+                          : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                      }`}
+                    >
+                      {f.charAt(0) + f.slice(1).toLowerCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {recurringFrequency === "WEEKLY" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Repeat on</label>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() =>
+                          setRecurringDays((prev) =>
+                            prev.includes(i) ? prev.filter((d) => d !== i) : [...prev, i]
+                          )
+                        }
+                        className={`w-10 h-10 rounded-full text-xs font-medium border transition-colors ${
+                          recurringDays.includes(i)
+                            ? "bg-primary-600 text-white border-primary-600"
+                            : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                        }`}
+                      >
+                        {day}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {recurringFrequency === "MONTHLY" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Day of month</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={recurringMonthDay}
+                    onChange={(e) => setRecurringMonthDay(Number(e.target.value))}
+                    className="w-24 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Row: Deadline + Project */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Deadline</label>
               <input

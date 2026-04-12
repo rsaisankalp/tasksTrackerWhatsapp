@@ -3,6 +3,15 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
+function normalizePhone(raw: string): string {
+  const cleaned = raw.replace(/[\s\-().]/g, "");
+  if (!cleaned) return "";
+  if (cleaned.startsWith("+")) return cleaned;
+  if (cleaned.startsWith("91") && cleaned.length === 12) return `+${cleaned}`;
+  if (/^\d{10}$/.test(cleaned)) return `+91${cleaned}`;
+  return cleaned.startsWith("+") ? cleaned : `+${cleaned}`;
+}
+
 const CreateContactSchema = z.object({
   name: z.string().min(1).max(200),
   phone: z.string().optional(),
@@ -80,7 +89,7 @@ export async function POST(req: NextRequest) {
     data: {
       orgId,
       name: contactData.name,
-      phone: contactData.phone || null,
+      phone: contactData.phone ? normalizePhone(contactData.phone) : null,
       email: contactData.email || null,
       role: contactData.role || null,
       department: contactData.department || null,

@@ -7,6 +7,9 @@ const CreateProjectSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().optional(),
   color: z.string().optional(),
+  taskVisibility: z.enum(["ALL", "OWN_ONLY"]).optional(),
+  taskCreation: z.enum(["ANYONE", "TEAM_ONLY"]).optional(),
+  memberContactIds: z.array(z.string()).optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
 });
@@ -66,15 +69,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  const { memberContactIds, taskVisibility, taskCreation, ...projectData } = parsed.data;
+
   const project = await prisma.project.create({
     data: {
       orgId,
-      name: parsed.data.name,
-      description: parsed.data.description,
-      color: parsed.data.color ?? "#6366f1",
-      startDate: parsed.data.startDate ? new Date(parsed.data.startDate) : null,
-      endDate: parsed.data.endDate ? new Date(parsed.data.endDate) : null,
+      name: projectData.name,
+      description: projectData.description,
+      color: projectData.color ?? "#6366f1",
+      taskVisibility: taskVisibility ?? "ALL",
+      taskCreation: taskCreation ?? "ANYONE",
+      startDate: projectData.startDate ? new Date(projectData.startDate) : null,
+      endDate: projectData.endDate ? new Date(projectData.endDate) : null,
+      members: memberContactIds?.length
+        ? { create: memberContactIds.map((contactId) => ({ contactId })) }
+        : undefined,
     },
+    include: { members: { include: { contact: true } } },
   });
 
   return NextResponse.json(project, { status: 201 });

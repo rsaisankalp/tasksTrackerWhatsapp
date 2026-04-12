@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { SESSION_OPTIONS, SessionData } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import Sidebar from "@/components/layout/sidebar";
+import MobileNav from "@/components/layout/mobile-nav";
 
 export default async function AppLayout({
   children,
@@ -41,6 +42,8 @@ export default async function AppLayout({
 
   const orgs = memberships.map((m) => ({ ...m.org, role: m.role }));
 
+  const firstOrg = orgs[0];
+
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       <Sidebar
@@ -52,7 +55,8 @@ export default async function AppLayout({
           image: session.user.image ?? null,
         }}
       />
-      <main className="flex-1 overflow-auto">{children}</main>
+      <main className="flex-1 overflow-auto pb-16 md:pb-0">{children}</main>
+      <MobileNav orgId={firstOrg?.id ?? ""} />
     </div>
   );
 }
