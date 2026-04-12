@@ -41,6 +41,7 @@ interface ProjectDetailClientProps {
     color: string;
     status: string;
     taskVisibility?: string;
+    taskCreation?: string;
     startDate?: string | null;
     endDate?: string | null;
     createdAt?: string;
@@ -76,7 +77,7 @@ export default function ProjectDetailClient({
   const [editDescription, setEditDescription] = useState(initialProject.description ?? "");
   const [editColor, setEditColor] = useState(initialProject.color);
   const [editVisibility, setEditVisibility] = useState<"ALL" | "OWN_ONLY">((initialProject.taskVisibility as any) ?? "ALL");
-  const [editTaskCreation, setEditTaskCreation] = useState<"ANYONE" | "TEAM_ONLY">((initialProject as any).taskCreation ?? "ANYONE");
+  const [editTaskCreation, setEditTaskCreation] = useState<"ANYONE" | "TEAM_ONLY">((initialProject.taskCreation as any) ?? "ANYONE");
   const [editMemberIds, setEditMemberIds] = useState<string[]>((initialProject.members ?? []).map((m) => m.contactId));
   const [contactSearch, setContactSearch] = useState("");
   const [savingSettings, setSavingSettings] = useState(false);
@@ -112,6 +113,7 @@ export default function ProjectDetailClient({
           description: updated.description,
           color: updated.color,
           taskVisibility: updated.taskVisibility,
+          taskCreation: updated.taskCreation,
           members: (updated.members ?? []).map((m: any) => ({
             contactId: m.contactId,
             name: m.contact.name,
@@ -362,7 +364,7 @@ export default function ProjectDetailClient({
           onClose={() => setShowCreateTask(false)}
           onCreated={(task) => { setTasks((prev) => [task, ...prev]); setShowCreateTask(false); }}
           teamMemberIds={(project.members ?? []).map((m) => m.contactId)}
-          taskCreation={(project as any).taskCreation ?? "ANYONE"}
+          taskCreation={project.taskCreation ?? "ANYONE"}
           currentUser={currentUser}
         />
       )}
@@ -371,6 +373,7 @@ export default function ProjectDetailClient({
         <TaskDetailPanel
           task={selectedTask}
           orgId={orgId}
+          contacts={contacts}
           onClose={() => setSelectedTask(null)}
           onUpdate={(updated) => {
             setTasks((prev) => prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)));
@@ -647,10 +650,11 @@ interface Comment {
 }
 
 function TaskDetailPanel({
-  task, orgId, onClose, onUpdate, projectId,
+  task, orgId, contacts, onClose, onUpdate, projectId,
 }: {
   task: Task;
   orgId: string;
+  contacts: Array<{ id: string; name: string; phone: string | null; department: string | null; avatarUrl: string | null }>;
   onClose: () => void;
   onUpdate: (t: any) => void;
   projectId: string;
@@ -662,6 +666,9 @@ function TaskDetailPanel({
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [postingComment, setPostingComment] = useState(false);
+  const [showReassign, setShowReassign] = useState(false);
+  const [reassignSearch, setReassignSearch] = useState("");
+  const [reassigning, setReassigning] = useState(false);
 
   useEffect(() => {
     fetch(`/api/tasks/${task.id}/comments`)
@@ -721,6 +728,31 @@ function TaskDetailPanel({
     }
   };
 
+  const handleReassign = async (contactId: string | null) => {
+    setReassigning(true);
+    try {
+      const res = await fetch(`/api/tasks/${localTask.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ executorContactId: contactId }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setLocalTask((prev) => ({ ...prev, executorContact: updated.executorContact ?? null }));
+        onUpdate({ ...localTask, executorContact: updated.executorContact ?? null });
+        setShowReassign(false);
+        setReassignSearch("");
+      }
+    } finally {
+      setReassigning(false);
+    }
+  };
+
+  const filteredReassignContacts = contacts.filter((c) =>
+    c.name.toLowerCase().includes(reassignSearch.toLowerCase()) ||
+    (c.phone ?? "").includes(reassignSearch)
+  );
+
   const impCfg = importanceConfig[localTask.importance] ?? importanceConfig.MID;
 
   return (
@@ -769,14 +801,85 @@ function TaskDetailPanel({
                 </span>
               </div>
             )}
-            {localTask.executorContact && (
-              <div className="flex items-center gap-1.5 bg-primary-50 rounded-xl px-3 py-2">
-                <div className="w-4 h-4 rounded-full bg-primary-200 flex items-center justify-center text-primary-700 text-[10px] font-bold">
-                  {localTask.executorContact.name[0].toUpperCase()}
+            <div className="relative">
+              <button
+                onClick={() => { setShowReassign(!showReassign); setReassignSearch(""); }}
+                className="flex items-center gap-1.5 bg-primary-50 hover:bg-primary-100 rounded-xl px-3 py-2 transition-colors"
+                title="Click to reassign executor"
+              >
+                {localTask.executorContact ? (
+                  <>
+                    <div className="w-4 h-4 rounded-full bg-primary-200 flex items-center justify-center text-primary-700 text-[10px] font-bold">
+                      {localTask.executorContact.name[0].toUpperCase()}
+                    </div>
+                    <span className="text-xs font-medium text-primary-700">{localTask.executorContact.name}</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <span className="text-xs text-gray-400">Assign executor</span>
+                  </>
+                )}
+                <svg className="w-3 h-3 text-gray-400 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {showReassign && (
+                <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
+                  <div className="p-2 border-b border-gray-100">
+                    <input
+                      type="text"
+                      value={reassignSearch}
+                      onChange={(e) => setReassignSearch(e.target.value)}
+                      placeholder="Search contacts..."
+                      className="w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="max-h-48 overflow-y-auto">
+                    {localTask.executorContact && (
+                      <button
+                        onClick={() => handleReassign(null)}
+                        disabled={reassigning}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-red-50 transition-colors text-xs text-red-500"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        Remove executor
+                      </button>
+                    )}
+                    {filteredReassignContacts.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => handleReassign(c.id)}
+                        disabled={reassigning}
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-primary-50 transition-colors ${localTask.executorContact?.id === c.id ? "bg-primary-50" : ""}`}
+                      >
+                        <div className="w-6 h-6 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 text-xs font-bold flex-shrink-0">
+                          {c.name[0].toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-medium text-gray-800 truncate">{c.name}</div>
+                          {c.phone && <div className="text-[10px] text-gray-400 truncate">{c.phone}</div>}
+                        </div>
+                        {localTask.executorContact?.id === c.id && (
+                          <svg className="w-3.5 h-3.5 text-primary-500 ml-auto flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </button>
+                    ))}
+                    {filteredReassignContacts.length === 0 && (
+                      <p className="text-xs text-gray-400 text-center py-3">No contacts found</p>
+                    )}
+                  </div>
                 </div>
-                <span className="text-xs font-medium text-primary-700">{localTask.executorContact.name}</span>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           {/* Description */}
