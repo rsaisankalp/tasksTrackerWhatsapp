@@ -34,10 +34,22 @@ interface InviteCodeItem {
   createdByName: string;
 }
 
+interface PlatformOrg {
+  id: string;
+  name: string;
+  slug: string;
+  createdAt: string;
+  owner: { name: string | null; email: string };
+  members: Array<{ id: string; userId: string; role: string; user: { id: string; name: string | null; email: string } }>;
+  _count: { projects: number; tasks: number };
+}
+
 interface SettingsClientProps {
   orgId: string;
   currentUserId: string;
   currentUserRole: string;
+  isSuperAdmin?: boolean;
+  allOrgs?: PlatformOrg[];
   initialTab: string;
   org: {
     id: string;
@@ -67,6 +79,8 @@ export default function SettingsClient({
   orgId,
   currentUserId,
   currentUserRole,
+  isSuperAdmin = false,
+  allOrgs = [],
   initialTab,
   org,
   whatsappSession,
@@ -109,6 +123,15 @@ export default function SettingsClient({
   const [newExpiryDays, setNewExpiryDays] = useState<number | "">("");
   const [creatingInvite, setCreatingInvite] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  // Platform admin
+  const [platformOrgs, setPlatformOrgs] = useState<PlatformOrg[]>(allOrgs);
+  const [expandedOrg, setExpandedOrg] = useState<string | null>(null);
+  const [showCreateOrg, setShowCreateOrg] = useState(false);
+  const [newOrgName, setNewOrgName] = useState("");
+  const [newOrgSlug, setNewOrgSlug] = useState("");
+  const [creatingOrg, setCreatingOrg] = useState(false);
+  const [platformError, setPlatformError] = useState("");
 
   const isOwner = currentUserRole === "OWNER";
   const isAdminOrOwner = ["OWNER", "ADMIN"].includes(currentUserRole);
@@ -241,9 +264,10 @@ export default function SettingsClient({
     { id: "whatsapp", label: "WhatsApp" },
     ...(isAdminOrOwner ? [{ id: "members", label: "Members" }] : []),
     ...(isAdminOrOwner ? [{ id: "invites", label: "Invites" }] : []),
+    ...(isSuperAdmin ? [{ id: "platform", label: "🛡️ Platform" }] : []),
   ];
 
-  const noSaveButton = ["whatsapp", "members", "invites"].includes(activeTab);
+  const noSaveButton = ["whatsapp", "members", "invites", "platform"].includes(activeTab);
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-3xl mx-auto">
@@ -671,6 +695,202 @@ export default function SettingsClient({
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Platform Tab */}
+        {activeTab === "platform" && isSuperAdmin && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">All Organizations</h2>
+                <p className="text-sm text-gray-500 mt-0.5">{platformOrgs.length} organizations on the platform</p>
+              </div>
+              <button
+                onClick={() => { setShowCreateOrg(true); setPlatformError(""); }}
+                className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-primary-700 transition-colors"
+              >
+                + Create Org
+              </button>
+            </div>
+
+            {platformOrgs.map((o) => (
+              <div key={o.id} className="border border-gray-200 rounded-xl overflow-hidden">
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <div className="w-9 h-9 bg-primary-100 rounded-lg flex items-center justify-center text-primary-700 font-bold text-sm flex-shrink-0">
+                    {o.name[0].toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-gray-900 text-sm">{o.name}</span>
+                      <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{o.slug}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {o.members.length} members · {o._count.projects} projects · {o._count.tasks} tasks
+                    </p>
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button
+                      onClick={async () => {
+                        const res = await fetch("/api/invites", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ orgId: o.id, maxUses: 50 }),
+                        });
+                        const data = await res.json();
+                        if (data.code) {
+                          const link = `${window.location.origin}/invite/${data.code}`;
+                          await navigator.clipboard.writeText(link).catch(() => {});
+                          alert(`Invite link copied:\n${link}`);
+                        }
+                      }}
+                      className="text-xs border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      🔗 Invite
+                    </button>
+                    <button
+                      onClick={() => setExpandedOrg(expandedOrg === o.id ? null : o.id)}
+                      className="text-xs bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      {expandedOrg === o.id ? "Hide" : "Members"}
+                    </button>
+                  </div>
+                </div>
+                {expandedOrg === o.id && (
+                  <div className="border-t border-gray-100 px-4 py-3 space-y-2">
+                    {o.members.map((m) => (
+                      <div key={m.id} className="flex items-center gap-3 py-1.5 px-2 rounded-lg hover:bg-gray-50">
+                        <div className="w-7 h-7 bg-primary-100 rounded-full flex items-center justify-center text-primary-700 text-xs font-medium flex-shrink-0">
+                          {(m.user.name ?? m.user.email)[0].toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-900">{m.user.name ?? "—"}</div>
+                          <div className="text-xs text-gray-400">{m.user.email}</div>
+                        </div>
+                        <select
+                          value={m.role}
+                          onChange={async (e) => {
+                            await fetch("/api/members", {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ orgId: o.id, userId: m.userId, role: e.target.value }),
+                            });
+                            setPlatformOrgs((prev) =>
+                              prev.map((org) =>
+                                org.id === o.id
+                                  ? { ...org, members: org.members.map((mem) => mem.userId === m.userId ? { ...mem, role: e.target.value } : mem) }
+                                  : org
+                              )
+                            );
+                          }}
+                          className="border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none"
+                        >
+                          <option value="OWNER">Owner</option>
+                          <option value="ADMIN">Admin</option>
+                          <option value="MEMBER">Member</option>
+                        </select>
+                        <button
+                          onClick={async () => {
+                            if (!confirm("Remove this member?")) return;
+                            await fetch("/api/members", {
+                              method: "DELETE",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ orgId: o.id, userId: m.userId }),
+                            });
+                            setPlatformOrgs((prev) =>
+                              prev.map((org) =>
+                                org.id === o.id
+                                  ? { ...org, members: org.members.filter((mem) => mem.userId !== m.userId) }
+                                  : org
+                              )
+                            );
+                          }}
+                          className="text-gray-300 hover:text-red-500 transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* Create Org Modal */}
+            {showCreateOrg && (
+              <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-5">Create Organization</h2>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Name</label>
+                      <input
+                        type="text"
+                        value={newOrgName}
+                        onChange={(e) => {
+                          setNewOrgName(e.target.value);
+                          setNewOrgSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""));
+                        }}
+                        placeholder="e.g. Vaidi Puja Services"
+                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        autoFocus
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Slug</label>
+                      <div className="flex rounded-xl border border-gray-200 overflow-hidden focus-within:ring-2 focus-within:ring-primary-500">
+                        <span className="bg-gray-50 px-3 py-3 text-sm text-gray-500 border-r border-gray-200">slug/</span>
+                        <input
+                          type="text"
+                          value={newOrgSlug}
+                          onChange={(e) => setNewOrgSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                          placeholder="vaidi-puja"
+                          className="flex-1 px-4 py-3 text-sm focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {platformError && (
+                    <p className="mt-3 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{platformError}</p>
+                  )}
+                  <div className="flex gap-3 mt-6">
+                    <button onClick={() => setShowCreateOrg(false)} className="flex-1 border border-gray-200 text-gray-600 py-3 rounded-xl text-sm hover:bg-gray-50 transition-colors">
+                      Cancel
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!newOrgName.trim() || !newOrgSlug.trim()) return;
+                        setCreatingOrg(true);
+                        setPlatformError("");
+                        try {
+                          const res = await fetch("/api/orgs", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ name: newOrgName.trim(), slug: newOrgSlug.trim() }),
+                          });
+                          const data = await res.json();
+                          if (!res.ok) throw new Error(data.error?.formErrors?.[0] ?? data.error ?? "Failed");
+                          setShowCreateOrg(false);
+                          setNewOrgName("");
+                          setNewOrgSlug("");
+                          window.location.reload();
+                        } catch (e: any) {
+                          setPlatformError(e.message);
+                        } finally {
+                          setCreatingOrg(false);
+                        }
+                      }}
+                      disabled={!newOrgName.trim() || !newOrgSlug.trim() || creatingOrg}
+                      className="flex-1 bg-primary-600 text-white py-3 rounded-xl text-sm font-medium hover:bg-primary-700 disabled:opacity-50 transition-colors"
+                    >
+                      {creatingOrg ? "Creating..." : "Create"}
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
