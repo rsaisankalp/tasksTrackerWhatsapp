@@ -63,10 +63,10 @@ export async function POST(req: NextRequest) {
   const jid = from;
 
   // Only process DMs if:
-  //   1. Message starts with "taskflow" prefix (explicit bot command), OR
+  //   1. Message contains "taskflow" anywhere (explicit bot command), OR
   //   2. Message is a direct reply to a task reminder (quotedMessageId)
   // Otherwise ignore — we don't want the bot interrupting normal conversations.
-  const hasPrefix = body.trim().toLowerCase().startsWith("taskflow");
+  const hasPrefix = /\btaskflow\b/i.test(body);
   const isTaskReply = !!quotedMessageId;
 
   if (!hasPrefix && !isTaskReply) {
@@ -74,10 +74,70 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, processed: false });
   }
 
-  // Strip the "taskflow" prefix before processing
+  // Strip "taskflow" and surrounding filler words (hey, hi, ok, etc.) before processing
   const processedBody = hasPrefix
-    ? body.trim().replace(/^taskflow\s*/i, "").trim() || body
+    ? body.trim().replace(/\b(hey|hi|ok|okay|oi|hello)?\s*taskflow\s*(,|\.)?/i, "").trim() || body
     : body;
+
+  // ── "List my tasks" intent: respond with full task list ─────────────────────
+  if (hasPrefix && !isTaskReply) {
+    const lower = processedBody.toLowerCase().trim();
+    const isListQuery =
+      /\b(my tasks?|pending|show tasks?|what.*tasks?|tasks.*list|list.*tasks?|kya.*kaam|kaam.*kya|mera.*kaam)\b/i.test(lower) ||
+      lower === "" || lower === "tasks" || lower === "status";
+
+    if (isListQuery) {
+      const contact = await prisma.contact.findFirst({
+        where: { orgId, phone: { contains: phone.slice(-10) } },
+        select: { id: true, name: true, magicToken: true },
+      });
+
+      if (contact) {
+        const allTasks = await prisma.task.findMany({
+          where: { orgId, executorContactId: contact.id, parentId: null },
+          include: {
+            project: { select: { name: true, color: true } },
+            subtasks: { orderBy: { createdAt: "asc" } },
+          },
+          orderBy: [{ importance: "asc" }, { deadline: "asc" }],
+        });
+
+        const pending = allTasks.filter((t) => t.status !== "DONE");
+        const impEmoji: Record<string, string> = { EMERGENCY: "🚨", HIGH: "🔴", MID: "🟡", LOW: "🟢" };
+        const stEmoji: Record<string, string> = { TODO: "⬜", IN_PROGRESS: "🔄", BLOCKED: "🚧" };
+        const now = new Date();
+
+        let reply: string;
+        if (pending.length === 0) {
+          reply = `✅ *No pending tasks!*\n\nYou're all caught up. Great work! 🙏`;
+        } else {
+          reply = `📋 *Your Tasks (${pending.length} pending)*\n\n`;
+          for (const t of pending) {
+            const isOverdue = t.deadline && new Date(t.deadline) < now;
+            const deadlineStr = t.deadline
+              ? `\n  📅 ${isOverdue ? "⚠️ Overdue · " : ""}${new Date(t.deadline).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`
+              : "";
+            const projectStr = t.project ? `\n  📁 ${t.project.name}` : "";
+            const pendingSubs = t.subtasks.filter((s) => s.status !== "DONE");
+            const subtaskStr = pendingSubs.length > 0
+              ? `\n  ${pendingSubs.map((s, i) => `${stEmoji[s.status] ?? "⬜"} ${i + 1}. ${s.title}`).join("\n  ")}`
+              : "";
+
+            reply += `${impEmoji[t.importance] ?? "📌"} *${t.title}* ${stEmoji[t.status] ?? ""}${projectStr}${deadlineStr}${subtaskStr}\n\n`;
+          }
+
+          if (contact.magicToken) {
+            reply += `📱 *View & update:* ${APP_URL}/view/${contact.magicToken}`;
+          }
+        }
+
+        await baileysManager.sendMessage(orgId, jid, reply).catch(console.error);
+        return NextResponse.json({ success: true, processed: true, intent: "list_tasks" });
+      }
+
+      return NextResponse.json({ success: true, processed: false });
+    }
+  }
 
   try {
     let relatedTask: any = null;
@@ -238,6 +298,31 @@ export async function POST(req: NextRequest) {
           body: `Task status updated to ${aiResult.newTaskStatus} via WhatsApp.`,
         },
       });
+
+      // Notify org owner/task creator when BLOCKED with HIGH or EMERGENCY importance
+      if (
+        aiResult.newTaskStatus === "BLOCKED" &&
+        (relatedTask.importance === "HIGH" || relatedTask.importance === "EMERGENCY")
+      ) {
+        try {
+          const creator = await prisma.user.findUnique({
+            where: { id: relatedTask.createdById },
+            select: { phone: true, name: true },
+          });
+          if (creator?.phone) {
+            const creatorPhone = creator.phone.replace(/\D/g, "");
+            const impEmoji = relatedTask.importance === "EMERGENCY" ? "🚨" : "🔴";
+            const notifyMsg =
+              `${impEmoji} *Task Blocked Alert*\n\n` +
+              `*${relatedTask.title}*\n` +
+              `Priority: ${relatedTask.importance}\n\n` +
+              `Executor has reported a blocker. Immediate attention may be needed.`;
+            await baileysManager.sendMessage(orgId, `${creatorPhone}@s.whatsapp.net`, notifyMsg).catch(console.error);
+          }
+        } catch (notifyErr) {
+          console.error("[Webhook] Error notifying owner of blocked task:", notifyErr);
+        }
+      }
     }
 
     // Update reminder status if task was acknowledged

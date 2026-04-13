@@ -71,6 +71,7 @@ export default async function InvitePage({ params }: Props) {
       org={invite.org}
       inviteCode={code}
       seatsLeft={invite.maxUses - invite.usedCount}
+      orgSlug={invite.org.slug}
     />
   );
 }

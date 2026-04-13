@@ -70,18 +70,20 @@ Rules:
 - Numbers like "1, 2 done" or "done 1 and 3" refer to subtask indices
 - "all done" or just "done" with no qualifier = mark all subtasks done
 - Always be friendly and brief in replyMessage (in the same language they used - Hindi/English/Hinglish)
-- For blockers, acknowledge and ask what help is needed
+- For blockers, acknowledge and confirm it has been marked as blocked — do NOT ask follow-up questions
 - Keep comments factual - record what they said
-- If genuinely unclear, ask a clarifying question (intent: question)
+- NEVER ask clarifying questions — always take the most likely action based on the message
+- NEVER say "Let me know if you need help" or "Do you need assistance?" — just confirm the action taken
+- If the intent is unclear, default to saving as a comment (intent: comment) and set newTaskStatus to null
 
 EXAMPLES:
 Message: "Sub task first one I think is completed, sub task second one right we are getting blocked with rahul he is not responding"
 Subtasks: 1. sub task 1, 2. sub task 2
-→ {"intent":"blocked","completedSubtaskIndices":[1],"blockedSubtaskIndices":[2],"newTaskStatus":"BLOCKED","comment":"Sub task 1 done. Sub task 2 blocked - Rahul not responding.","replyMessage":"Got it! Sub task 1 marked done. Sub task 2 marked as blocked. Will follow up with Rahul. 🙏"}
+→ {"intent":"blocked","completedSubtaskIndices":[1],"blockedSubtaskIndices":[2],"newTaskStatus":"BLOCKED","comment":"Sub task 1 done. Sub task 2 blocked - Rahul not responding.","replyMessage":"Got it! Sub task 1 ✅ marked done. Sub task 2 🚧 marked as blocked. Team has been notified. 🙏"}
 
 Message: "it is done but sub task 2 is pending partially blocked on hire"
 Subtasks: 1. sub task 1, 2. sub task 2
-→ {"intent":"blocked","completedSubtaskIndices":[1],"blockedSubtaskIndices":[2],"newTaskStatus":null,"comment":"Sub task 1 done. Sub task 2 blocked on hiring.","replyMessage":"Noted! Sub task 1 ✅. Sub task 2 blocked on hire - I'll escalate. 🙏"}
+→ {"intent":"blocked","completedSubtaskIndices":[1],"blockedSubtaskIndices":[2],"newTaskStatus":null,"comment":"Sub task 1 done. Sub task 2 blocked on hiring.","replyMessage":"Noted! Sub task 1 ✅. Sub task 2 🚧 marked as blocked. Team has been notified. 🙏"}
 
 Message: "done"
 Subtasks: 1. sub task 1, 2. sub task 2

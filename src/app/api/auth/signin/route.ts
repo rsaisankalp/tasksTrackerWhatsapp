@@ -75,38 +75,22 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // If a target org was found, ensure user is a member
+  // If a target org was found via domain match, add as OWNER; via URL slug, add as MEMBER
   if (targetOrg) {
+    const role = requestedOrgSlug ? "MEMBER" : "OWNER";
     await prisma.orgMember.upsert({
       where: { orgId_userId: { orgId: targetOrg.id, userId: user.id } },
-      create: { orgId: targetOrg.id, userId: user.id, role: "MEMBER" },
+      create: { orgId: targetOrg.id, userId: user.id, role },
       update: {},
     });
   }
 
-  // Auto-create personal org for new users with no memberships
+
+  // Invite-only: new users must arrive via an invite link or domain match
   const existingMemberships = await prisma.orgMember.count({ where: { userId: user.id } });
-  if (existingMemberships === 0) {
-    const baseSlug = (user.email.split("@")[0] ?? "personal")
-      .toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/^-+|-+$/g, "").slice(0, 30) || "personal";
-    // Ensure slug is unique
-    let slug = baseSlug;
-    let attempt = 0;
-    while (await prisma.organization.findUnique({ where: { slug } })) {
-      attempt++;
-      slug = `${baseSlug}-${attempt}`;
-    }
-    const personalOrg = await prisma.organization.create({
-      data: {
-        name: `${user.name ?? user.email}'s Workspace`,
-        slug,
-        type: "PERSONAL",
-        ownerId: user.id,
-        members: { create: { userId: user.id, role: "OWNER" } },
-        projects: { create: { name: "General", color: "#6366f1", status: "ACTIVE" } },
-      },
-    });
-    if (!targetOrg) targetOrg = { id: personalOrg.id, slug: personalOrg.slug };
+  if (existingMemberships === 0 && !targetOrg) {
+    // No invite, no domain match — block access
+    return NextResponse.json({ error: "no_access" }, { status: 403 });
   }
 
   // Find first org membership

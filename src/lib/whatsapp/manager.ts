@@ -14,6 +14,8 @@ import { prisma } from "@/lib/prisma";
 
 const SESSIONS_PATH = process.env.WA_SESSIONS_PATH || "./.wa-sessions";
 const APP_URL = process.env.APP_URL || "http://localhost:3000";
+// Always call webhook via localhost to avoid going through external proxy
+const WEBHOOK_URL = "http://localhost:3000";
 const WEBHOOK_SECRET = process.env.INTERNAL_WEBHOOK_SECRET || "dev-secret";
 
 interface WASession {
@@ -181,7 +183,7 @@ export class BaileysManager extends EventEmitter {
         msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.extendedTextMessage?.text ||
         null;
 
-      await fetch(`${APP_URL}/api/webhooks/whatsapp`, {
+      await fetch(`${WEBHOOK_URL}/api/webhooks/whatsapp`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

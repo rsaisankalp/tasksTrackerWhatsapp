@@ -66,17 +66,20 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-950 via-primary-900 to-slate-900 flex items-center justify-center p-6">
+    <div className="min-h-screen flex items-center justify-center bg-[linear-gradient(180deg,#fffaf4_0%,#fff5ec_52%,#f7fbff_100%)] p-4 sm:p-6">
       <div className="w-full max-w-lg">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 bg-primary-500 rounded-xl mb-4">
+          <div
+            className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl shadow-lg"
+            style={{ background: "linear-gradient(135deg, #F47C20, #FDB813)" }}
+          >
             <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-white">Set up TaskFlow</h1>
-          <p className="text-primary-300 mt-1">Get started in 2 quick steps</p>
+          <h1 className="text-2xl font-bold text-gray-950">Set up TaskFlow</h1>
+          <p className="mt-1 text-sm text-stone-500">Get started in 2 quick steps</p>
         </div>
 
         {/* Step indicator */}
@@ -89,18 +92,18 @@ export default function OnboardingPage() {
                     ? "bg-primary-500 text-white"
                     : s < step || (step === "done" && s !== "done")
                     ? "bg-green-500 text-white"
-                    : "bg-white/10 text-gray-400"
+                    : "border border-gray-200 bg-white text-gray-400"
                 }`}
               >
                 {i + 1}
               </div>
-              {i < 2 && <div className="w-12 h-0.5 bg-white/10" />}
+              {i < 2 && <div className="h-0.5 w-12 bg-orange-100" />}
             </div>
           ))}
         </div>
 
         {/* Step content */}
-        <div className="bg-white rounded-2xl p-8 shadow-2xl">
+        <div className="rounded-[28px] border border-white/80 bg-white/90 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur md:p-8">
           {step === "org" && (
             <div>
               <h2 className="text-xl font-bold text-gray-900 mb-1">Create your organization</h2>

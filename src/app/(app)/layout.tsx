@@ -45,7 +45,7 @@ export default async function AppLayout({
   const firstOrg = orgs[0];
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-[linear-gradient(180deg,#fffaf4_0%,#fff6ec_42%,#f8fbff_100%)]">
       <Sidebar
         orgs={orgs}
         user={{
@@ -55,7 +55,10 @@ export default async function AppLayout({
           image: session.user.image ?? null,
         }}
       />
-      <main className="flex-1 overflow-auto pb-16 md:pb-0">{children}</main>
+      <main className="relative flex-1 overflow-auto pb-16 md:pb-0">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-56 bg-[radial-gradient(circle_at_top_right,rgba(244,124,32,0.12),transparent_44%),radial-gradient(circle_at_top_left,rgba(253,184,19,0.12),transparent_38%)]" />
+        <div className="relative min-h-full">{children}</div>
+      </main>
       <MobileNav orgId={firstOrg?.id ?? ""} />
     </div>
   );

@@ -22,7 +22,7 @@
   }
   body {
     color: var(--text-main);
-    background: linear-gradient(135deg, #FFF5EC 0%, #FFFFFF 100%);
+    background: #F5F7FA;
     min-height: 100vh;
   }
   ::-webkit-scrollbar {

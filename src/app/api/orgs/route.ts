@@ -5,11 +5,8 @@ import { z } from "zod";
 
 const CreateOrgSchema = z.object({
   name: z.string().min(1).max(100),
-  slug: z
-    .string()
-    .min(2)
-    .max(50)
-    .regex(/^[a-z0-9-]+$/),
+  type: z.enum(["TEAM", "GENERAL"]).default("TEAM"),
+  emailDomain: z.string().regex(/^[a-z0-9.-]+\.[a-z]{2,}$/).optional(),
 });
 
 // Emails allowed to create new organizations (comma-separated in env)
@@ -63,31 +60,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { name, slug } = parsed.data;
+  const { name, type, emailDomain } = parsed.data;
 
-  const existing = await prisma.organization.findUnique({ where: { slug } });
-  if (existing) {
-    return NextResponse.json({ error: "Slug already taken" }, { status: 409 });
+  // Auto-generate slug from name
+  const baseSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "org";
+  let slug = baseSlug;
+  let attempt = 0;
+  while (await prisma.organization.findUnique({ where: { slug } })) {
+    attempt++;
+    slug = `${baseSlug}-${attempt}`;
   }
 
   const org = await prisma.organization.create({
     data: {
       name,
       slug,
+      type,
       ownerId: session.user.id,
-      members: {
-        create: {
-          userId: session.user.id,
-          role: "OWNER",
-        },
-      },
-      projects: {
-        create: {
-          name: "General",
-          color: "#6366f1",
-          status: "ACTIVE",
-        },
-      },
+      emailDomains: emailDomain ? [emailDomain.toLowerCase()] : [],
+      members: { create: { userId: session.user.id, role: "OWNER" } },
+      projects: { create: { name: "General", color: "#6366f1", status: "ACTIVE" } },
     },
   });
 

@@ -9,9 +9,10 @@ interface InviteJoinClientProps {
   org: { id: string; name: string; slug: string; logoUrl: string | null };
   inviteCode: string;
   seatsLeft: number;
+  orgSlug: string;
 }
 
-export default function InviteJoinClient({ org, inviteCode, seatsLeft }: InviteJoinClientProps) {
+export default function InviteJoinClient({ org, inviteCode, seatsLeft, orgSlug }: InviteJoinClientProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -22,18 +23,19 @@ export default function InviteJoinClient({ org, inviteCode, seatsLeft }: InviteJ
     try {
       const result = await signInWithPopup(firebaseAuth, googleProvider);
       const idToken = await result.user.getIdToken();
-
       const res = await fetch("/api/auth/signin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
+        body: JSON.stringify({ idToken, orgSlug }),
       });
-      if (!res.ok) throw new Error("Sign-in failed");
-
-      // After signing in, navigate to invite page which will complete the join on the server
-      router.replace(`/invite/${inviteCode}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error === "no_access" ? "You need a valid invite to join." : "Sign-in failed");
+      // Refresh session to pick up org membership
+      await fetch("/api/auth/refresh", { method: "POST" });
+      router.replace("/dashboard");
     } catch (e: any) {
       setError(e?.message ?? "Sign-in failed");
+    } finally {
       setLoading(false);
     }
   };

@@ -188,21 +188,32 @@ export default function ContactViewPage() {
                         </div>
                       )}
 
-                      {/* Action button */}
+                      {/* Action buttons */}
                       {task.status !== "DONE" && cfg && (
-                        <button
-                          onClick={() => updateStatus(task.id, cfg.next)}
-                          disabled={updating === task.id}
-                          className={`mt-3 w-full py-2 rounded-xl text-xs font-semibold transition-all ${
-                            cfg.next === "DONE"
-                              ? "bg-green-600 text-white hover:bg-green-700"
-                              : cfg.next === "IN_PROGRESS"
-                              ? "bg-blue-600 text-white hover:bg-blue-700"
-                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                          } disabled:opacity-50`}
-                        >
-                          {updating === task.id ? "Updating..." : cfg.nextLabel}
-                        </button>
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            onClick={() => updateStatus(task.id, cfg.next)}
+                            disabled={updating === task.id}
+                            className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all ${
+                              cfg.next === "DONE"
+                                ? "bg-green-600 text-white hover:bg-green-700"
+                                : cfg.next === "IN_PROGRESS"
+                                ? "bg-blue-600 text-white hover:bg-blue-700"
+                                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                            } disabled:opacity-50`}
+                          >
+                            {updating === task.id ? "Updating..." : cfg.nextLabel}
+                          </button>
+                          {(task.status === "TODO" || task.status === "IN_PROGRESS") && (
+                            <button
+                              onClick={() => updateStatus(task.id, "BLOCKED")}
+                              disabled={updating === task.id}
+                              className="px-3 py-2 rounded-xl text-xs font-semibold bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 transition-all disabled:opacity-50"
+                            >
+                              🚧 Blocked
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
