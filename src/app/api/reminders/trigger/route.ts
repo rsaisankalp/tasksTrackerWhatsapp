@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { sendWhatsAppForExecutor } from "@/lib/whatsapp/delivery";
+import { sendWhatsAppUsingSenderPreference } from "@/lib/whatsapp/delivery";
 import { formatReminderMessage } from "@/lib/reminders/rules";
 
 export const runtime = "nodejs";
@@ -12,12 +12,14 @@ export async function POST(req: NextRequest) {
   // Allow internal calls with webhook secret, or require user session
   const internalSecret = req.headers.get("x-webhook-secret");
   const isInternal = internalSecret === process.env.INTERNAL_WEBHOOK_SECRET;
+  let requesterUserId: string | null = null;
 
   if (!isInternal) {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    requesterUserId = session.user.id;
   }
 
   const { searchParams } = new URL(req.url);
@@ -69,10 +71,10 @@ export async function POST(req: NextRequest) {
     );
 
     try {
-      const sendResult = await sendWhatsAppForExecutor({
+      const sendResult = await sendWhatsAppUsingSenderPreference({
         orgId,
         phone: task.executorContact.phone,
-        executorContactId: task.executorContact.id,
+        preferredUserId: isInternal ? task.createdById : requesterUserId ?? task.createdById,
         text: messageBody,
       });
       if (!sendResult?.waMessageId) {

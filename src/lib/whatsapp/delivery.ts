@@ -1,10 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { baileysManager } from "@/lib/whatsapp/manager";
 
-type DeliveryTarget = {
+type SenderDeliveryTarget = {
   orgId: string;
   phone: string;
-  executorContactId?: string | null;
+  preferredUserId?: string | null;
+  text: string;
 };
 
 type DeliveryResult = {
@@ -17,62 +18,47 @@ function normalizePhone(phone: string) {
   return phone.replace(/\D/g, "");
 }
 
-export async function sendWhatsAppForExecutor({
+async function getPreferredSender(orgId: string, preferredUserId?: string | null) {
+  if (!preferredUserId) return null;
+
+  return prisma.user.findFirst({
+    where: { id: preferredUserId },
+    select: {
+      id: true,
+      userWhatsappSession: { select: { status: true } },
+      memberships: {
+        where: { orgId },
+        select: { whatsAppDeliveryMode: true },
+        take: 1,
+      },
+    },
+  });
+}
+
+export async function sendWhatsAppUsingSenderPreference({
   orgId,
   phone,
-  executorContactId,
+  preferredUserId,
   text,
-}: DeliveryTarget & { text: string }): Promise<DeliveryResult | null> {
-  const normalizedPhone = normalizePhone(phone);
-  const jid = `${normalizedPhone}@s.whatsapp.net`;
-
-  let matchedUser:
-    | {
-        id: string;
-        userWhatsappSession: { status: string } | null;
-        memberships: { whatsAppDeliveryMode: "OWN" | "ORG" }[];
-      }
-    | null = null;
-
-  if (executorContactId) {
-    const contact = await prisma.contact.findUnique({
-      where: { id: executorContactId },
-      select: { email: true, phone: true },
-    });
-
-    if (contact) {
-      matchedUser = await prisma.user.findFirst({
-        where: contact.email
-          ? { email: contact.email }
-          : contact.phone
-            ? { phone: contact.phone }
-            : { id: "__no_match__" },
-        select: {
-          id: true,
-          userWhatsappSession: { select: { status: true } },
-          memberships: {
-            where: { orgId },
-            select: { whatsAppDeliveryMode: true },
-            take: 1,
-          },
-        },
-      });
-    }
-  }
-
-  const preferredMode = matchedUser?.memberships[0]?.whatsAppDeliveryMode ?? "OWN";
-  const isUserConnected = matchedUser?.userWhatsappSession?.status === "CONNECTED";
-  const isOrgConnected =
-    (await prisma.whatsAppSession.findUnique({
+}: SenderDeliveryTarget): Promise<DeliveryResult | null> {
+  const jid = `${normalizePhone(phone)}@s.whatsapp.net`;
+  const [sender, orgSession] = await Promise.all([
+    getPreferredSender(orgId, preferredUserId),
+    prisma.whatsAppSession.findUnique({
       where: { orgId },
       select: { status: true },
-    }))?.status === "CONNECTED";
+    }),
+  ]);
 
-  if (preferredMode === "OWN" && matchedUser?.id && isUserConnected) {
+  const preferredMode = sender?.memberships[0]?.whatsAppDeliveryMode ?? "OWN";
+  const isUserConnected = sender?.userWhatsappSession?.status === "CONNECTED";
+  const isOrgConnected = orgSession?.status === "CONNECTED";
+
+  if (preferredMode === "OWN" && sender?.id && isUserConnected) {
     return {
       channel: "OWN",
-      userId: matchedUser.id,
-      waMessageId: await baileysManager.sendUserMessage(matchedUser.id, jid, text),
+      userId: sender.id,
+      waMessageId: await baileysManager.sendUserMessage(sender.id, jid, text),
     };
   }
 
@@ -83,11 +69,11 @@ export async function sendWhatsAppForExecutor({
     };
   }
 
-  if (matchedUser?.id && isUserConnected) {
+  if (sender?.id && isUserConnected) {
     return {
       channel: "OWN",
-      userId: matchedUser.id,
-      waMessageId: await baileysManager.sendUserMessage(matchedUser.id, jid, text),
+      userId: sender.id,
+      waMessageId: await baileysManager.sendUserMessage(sender.id, jid, text),
     };
   }
 

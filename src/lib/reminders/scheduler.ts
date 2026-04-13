@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { prisma } from "@/lib/prisma";
-import { sendWhatsAppForExecutor } from "@/lib/whatsapp/delivery";
+import { sendWhatsAppUsingSenderPreference } from "@/lib/whatsapp/delivery";
 import { shouldSendReminder, formatReminderMessage } from "./rules";
 import type { WorkingHoursConfig } from "@/types";
 
@@ -105,10 +105,10 @@ async function checkAndSendReminders() {
         magicLink
       );
 
-      const sendResult = await sendWhatsAppForExecutor({
+      const sendResult = await sendWhatsAppUsingSenderPreference({
         orgId: task.orgId,
         phone: task.executorContact.phone!,
-        executorContactId: task.executorContact.id,
+        preferredUserId: task.createdById,
         text: messageBody,
       });
       if (!sendResult?.waMessageId) continue;
