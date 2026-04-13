@@ -84,37 +84,47 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const tasks = await prisma.task.findMany({
-    where: {
-      orgId,
-      ...(projectId ? { projectId } : {}),
-      ...(status ? { status: status as any } : {}),
-      parentId: null,
-      ...(access.isAdmin
-        ? {}
-        : {
-            OR: [
-              { projectId: null },
-              {
-                project: {
-                  projectVisibility: "ALL",
-                },
+  const taskWhere: any = {
+    orgId,
+    ...(projectId ? { projectId } : {}),
+    ...(status ? { status: status as any } : {}),
+    parentId: null,
+  };
+
+  if (access.isAdmin) {
+    taskWhere.OR = [{ projectId: null }, { projectId: { not: null } }];
+  } else {
+    taskWhere.OR = [
+      { projectId: null },
+      { project: { projectVisibility: "ALL", taskVisibility: "ALL" } },
+      ...(access.myContactIds.length
+        ? [
+            {
+              project: { projectVisibility: "ALL", taskVisibility: "OWN_ONLY" },
+              executorContactId: { in: access.myContactIds },
+            },
+            {
+              project: {
+                projectVisibility: "TEAM_ONLY",
+                taskVisibility: "ALL",
+                members: { some: { contactId: { in: access.myContactIds } } },
               },
-              ...(access.myContactIds.length
-                ? [
-                    {
-                      project: {
-                        projectVisibility: "TEAM_ONLY",
-                        members: {
-                          some: { contactId: { in: access.myContactIds } },
-                        },
-                      },
-                    },
-                  ]
-                : []),
-            ],
-          }),
-    },
+            },
+            {
+              project: {
+                projectVisibility: "TEAM_ONLY",
+                taskVisibility: "OWN_ONLY",
+                members: { some: { contactId: { in: access.myContactIds } } },
+              },
+              executorContactId: { in: access.myContactIds },
+            },
+          ]
+        : []),
+    ];
+  }
+
+  const tasks = await prisma.task.findMany({
+    where: taskWhere,
     include: {
       executorContact: {
         select: { id: true, name: true, phone: true, avatarUrl: true },
