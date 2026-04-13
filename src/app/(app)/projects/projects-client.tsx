@@ -28,6 +28,7 @@ interface Project {
   description: string | null;
   color: string;
   status: string;
+  projectVisibility: string;
   taskVisibility: string;
   startDate: string | null;
   endDate: string | null;
@@ -48,6 +49,7 @@ export default function ProjectsClient({ orgId, contacts, initialProjects }: Pro
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [color, setColor] = useState(COLORS[0]);
+  const [projectVisibility, setProjectVisibility] = useState<"ALL" | "TEAM_ONLY">("TEAM_ONLY");
   const [taskVisibility, setTaskVisibility] = useState<"ALL" | "OWN_ONLY">("ALL");
   const [taskCreation, setTaskCreation] = useState<"ANYONE" | "TEAM_ONLY">("ANYONE");
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
@@ -71,6 +73,7 @@ export default function ProjectsClient({ orgId, contacts, initialProjects }: Pro
     setName("");
     setDescription("");
     setColor(COLORS[0]);
+    setProjectVisibility("TEAM_ONLY");
     setTaskVisibility("ALL");
     setSelectedContactIds([]);
     setContactSearch("");
@@ -89,6 +92,7 @@ export default function ProjectsClient({ orgId, contacts, initialProjects }: Pro
           name: name.trim(),
           description,
           color,
+          projectVisibility,
           taskVisibility,
           taskCreation,
           memberContactIds: selectedContactIds,
@@ -167,6 +171,9 @@ export default function ProjectsClient({ orgId, contacts, initialProjects }: Pro
                     <div className="w-4 h-4 rounded-full" style={{ backgroundColor: project.color }} />
                   </div>
                   <div className="flex items-center gap-2">
+                    {project.projectVisibility === "TEAM_ONLY" && (
+                      <span className="text-xs px-2 py-1 rounded-full font-medium bg-purple-100 text-purple-700">Team only</span>
+                    )}
                     {project.taskVisibility === "OWN_ONLY" && (
                       <span className="text-xs px-2 py-1 rounded-full font-medium bg-amber-100 text-amber-700">Private</span>
                     )}
@@ -285,6 +292,27 @@ export default function ProjectsClient({ orgId, contacts, initialProjects }: Pro
                       style={{ backgroundColor: c }}
                     />
                   ))}
+                </div>
+              </div>
+
+              {/* Project Visibility */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Project Visibility</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setProjectVisibility("ALL")}
+                    className={`p-3 rounded-xl border-2 text-left transition-all ${projectVisibility === "ALL" ? "border-primary-500 bg-primary-50" : "border-gray-200 hover:border-gray-300"}`}
+                  >
+                    <div className="text-sm font-medium text-gray-900 mb-0.5">Everyone in org</div>
+                    <div className="text-xs text-gray-500">Project is visible to the full org</div>
+                  </button>
+                  <button
+                    onClick={() => setProjectVisibility("TEAM_ONLY")}
+                    className={`p-3 rounded-xl border-2 text-left transition-all ${projectVisibility === "TEAM_ONLY" ? "border-primary-500 bg-primary-50" : "border-gray-200 hover:border-gray-300"}`}
+                  >
+                    <div className="text-sm font-medium text-gray-900 mb-0.5">Team only</div>
+                    <div className="text-xs text-gray-500">Only project members can see it</div>
+                  </button>
                 </div>
               </div>
 

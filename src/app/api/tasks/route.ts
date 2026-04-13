@@ -31,6 +31,39 @@ const CreateTaskSchema = z.object({
     .optional(),
 });
 
+async function getTaskAccessContext(orgId: string, userId: string) {
+  const [membership, user] = await Promise.all([
+    prisma.orgMember.findUnique({
+      where: { orgId_userId: { orgId, userId } },
+    }),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, phone: true },
+    }),
+  ]);
+
+  if (!membership) return null;
+
+  const isAdmin = ["OWNER", "ADMIN"].includes(membership.role);
+  const contactFilters = [
+    user?.email ? { email: user.email } : null,
+    user?.phone ? { phone: user.phone } : null,
+  ].filter(Boolean) as any[];
+
+  const myContacts = contactFilters.length
+    ? await prisma.contact.findMany({
+        where: { orgId, OR: contactFilters },
+        select: { id: true },
+      })
+    : [];
+
+  return {
+    membership,
+    isAdmin,
+    myContactIds: myContacts.map((contact) => contact.id),
+  };
+}
+
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -46,10 +79,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "orgId required" }, { status: 400 });
   }
 
-  const membership = await prisma.orgMember.findUnique({
-    where: { orgId_userId: { orgId, userId: session.user.id } },
-  });
-  if (!membership) {
+  const access = await getTaskAccessContext(orgId, session.user.id);
+  if (!access) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -59,6 +90,30 @@ export async function GET(req: NextRequest) {
       ...(projectId ? { projectId } : {}),
       ...(status ? { status: status as any } : {}),
       parentId: null,
+      ...(access.isAdmin
+        ? {}
+        : {
+            OR: [
+              { projectId: null },
+              {
+                project: {
+                  projectVisibility: "ALL",
+                },
+              },
+              ...(access.myContactIds.length
+                ? [
+                    {
+                      project: {
+                        projectVisibility: "TEAM_ONLY",
+                        members: {
+                          some: { contactId: { in: access.myContactIds } },
+                        },
+                      },
+                    },
+                  ]
+                : []),
+            ],
+          }),
     },
     include: {
       executorContact: {
@@ -122,11 +177,44 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const membership = await prisma.orgMember.findUnique({
-    where: { orgId_userId: { orgId, userId: session.user.id } },
-  });
-  if (!membership) {
+  const access = await getTaskAccessContext(orgId, session.user.id);
+  if (!access) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (taskData.projectId) {
+    const project = await prisma.project.findFirst({
+      where: {
+        id: taskData.projectId,
+        orgId,
+      },
+      select: {
+        id: true,
+        projectVisibility: true,
+        taskCreation: true,
+        members: { select: { contactId: true } },
+      },
+    });
+
+    if (!project) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+
+    const isProjectMember = access.myContactIds.some((contactId) =>
+      project.members.some((member) => member.contactId === contactId)
+    );
+
+    if (!access.isAdmin && project.projectVisibility === "TEAM_ONLY" && !isProjectMember) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    if (
+      !access.isAdmin &&
+      project.taskCreation === "TEAM_ONLY" &&
+      !isProjectMember
+    ) {
+      return NextResponse.json({ error: "Only project members can create tasks" }, { status: 403 });
+    }
   }
 
   // Auto-assign to General project if no project selected (top-level tasks only)

@@ -5,9 +5,38 @@ import { prisma } from "@/lib/prisma";
 async function getProject(projectId: string, userId: string) {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    include: { org: { include: { members: { where: { userId } } } } },
+    include: {
+      org: { include: { members: { where: { userId } } } },
+      members: true,
+    },
   });
   if (!project || project.org.members.length === 0) return null;
+
+  const orgMembership = project.org.members[0];
+  const isAdmin = ["OWNER", "ADMIN"].includes(orgMembership.role);
+  if (!isAdmin && project.projectVisibility === "TEAM_ONLY") {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, phone: true },
+    });
+    const contactFilters = [
+      user?.email ? { email: user.email } : null,
+      user?.phone ? { phone: user.phone } : null,
+    ].filter(Boolean) as any[];
+    const myContacts = contactFilters.length
+      ? await prisma.contact.findMany({
+          where: {
+            orgId: project.orgId,
+            OR: contactFilters,
+          },
+          select: { id: true },
+        })
+      : [];
+    const myContactIds = new Set(myContacts.map((contact) => contact.id));
+    const isProjectMember = project.members.some((member) => myContactIds.has(member.contactId));
+    if (!isProjectMember) return null;
+  }
+
   return project;
 }
 
@@ -54,6 +83,7 @@ export async function PATCH(
       description: rest.description,
       color: rest.color,
       status: rest.status,
+      projectVisibility: rest.projectVisibility,
       taskVisibility: rest.taskVisibility,
       taskCreation: rest.taskCreation,
       startDate: rest.startDate ? new Date(rest.startDate) : undefined,

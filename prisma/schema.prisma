@@ -200,6 +200,7 @@ model Project {
   description    String?
   color          String        @default("#6366f1")
   status         ProjectStatus @default(ACTIVE)
+  projectVisibility String     @default("TEAM_ONLY")   // "ALL" or "TEAM_ONLY"
   taskVisibility  String        @default("ALL")   // "ALL" or "OWN_ONLY"
   taskCreation    String        @default("ANYONE") // "ANYONE" or "TEAM_ONLY"
   startDate      DateTime?
