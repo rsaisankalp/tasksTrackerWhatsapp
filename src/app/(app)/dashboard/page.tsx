@@ -1,4 +1,5 @@
 import { auth } from "@/auth";
+import { buildContactIdentityFilters } from "@/lib/contact-identity";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import DashboardClient from "./dashboard-client";
@@ -28,10 +29,10 @@ export default async function DashboardPage({
   });
   const isAdmin = !!membership && ["OWNER", "ADMIN"].includes(membership.role);
 
-  const contactFilters = [
-    currentUser?.email ? { email: currentUser.email } : null,
-    currentUser?.phone ? { phone: currentUser.phone } : null,
-  ].filter(Boolean) as any[];
+  const contactFilters = buildContactIdentityFilters(
+    currentUser?.email,
+    currentUser?.phone
+  );
 
   const myContacts = contactFilters.length
     ? await prisma.contact.findMany({

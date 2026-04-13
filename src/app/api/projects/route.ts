@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { buildContactIdentityFilters } from "@/lib/contact-identity";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
@@ -34,10 +35,7 @@ async function getAccessContext(orgId: string, userId: string, email?: string | 
   if (!membership) return null;
 
   const isAdmin = ["OWNER", "ADMIN"].includes(membership.role);
-  const contactFilters = [
-    email ? { email } : null,
-    phone ? { phone } : null,
-  ].filter(Boolean) as any[];
+  const contactFilters = buildContactIdentityFilters(email, phone);
 
   const myContacts = contactFilters.length
     ? await prisma.contact.findMany({
