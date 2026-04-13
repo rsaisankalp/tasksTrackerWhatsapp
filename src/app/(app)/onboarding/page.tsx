@@ -1,23 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 
 type Step = "org" | "whatsapp" | "done";
 
 export default function OnboardingPage() {
   const router = useRouter();
-  
-  const [step, setStep] = useState<Step>("org");
+  const searchParams = useSearchParams();
+  const inviteMode = searchParams.get("invite") === "1";
+  const presetOrgId = searchParams.get("orgId");
+
+  const [step, setStep] = useState<Step>(inviteMode ? "whatsapp" : "org");
   const [orgName, setOrgName] = useState("");
   const [orgSlug, setOrgSlug] = useState("");
-  const [orgId, setOrgId] = useState<string | null>(null);
+  const [orgId, setOrgId] = useState<string | null>(presetOrgId);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [qrData, setQrData] = useState<string | null>(null);
   const [waConnected, setWaConnected] = useState(false);
   const [waPhone, setWaPhone] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (inviteMode) {
+      setStep("whatsapp");
+      if (presetOrgId) setOrgId(presetOrgId);
+    }
+  }, [inviteMode, presetOrgId]);
 
   const handleCreateOrg = async () => {
     setLoading(true);
@@ -79,7 +90,9 @@ export default function OnboardingPage() {
             </svg>
           </div>
           <h1 className="text-2xl font-bold text-gray-950">Set up TaskFlow</h1>
-          <p className="mt-1 text-sm text-stone-500">Get started in 2 quick steps</p>
+          <p className="mt-1 text-sm text-stone-500">
+            {inviteMode ? "Finish setup for your invited workspace" : "Get started in 2 quick steps"}
+          </p>
         </div>
 
         {/* Step indicator */}
@@ -104,7 +117,7 @@ export default function OnboardingPage() {
 
         {/* Step content */}
         <div className="rounded-[28px] border border-white/80 bg-white/90 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur md:p-8">
-          {step === "org" && (
+          {step === "org" && !inviteMode && (
             <div>
               <h2 className="text-xl font-bold text-gray-900 mb-1">Create your organization</h2>
               <p className="text-gray-500 text-sm mb-6">This is your team workspace for managing tasks</p>
@@ -173,7 +186,9 @@ export default function OnboardingPage() {
             <div>
               <h2 className="text-xl font-bold text-gray-900 mb-1">Connect WhatsApp</h2>
               <p className="text-gray-500 text-sm mb-6">
-                Connect your WhatsApp to send automated reminders to your team
+                {inviteMode
+                  ? "Connect WhatsApp now so task reminders can reach you and your team. You can also skip and do this later from Settings."
+                  : "Connect your WhatsApp to send automated reminders to your team"}
               </p>
 
               {!qrData && !waConnected && (
@@ -184,7 +199,9 @@ export default function OnboardingPage() {
                     </svg>
                   </div>
                   <p className="text-gray-600 text-sm mb-6">
-                    Scan a QR code with your WhatsApp to link your account
+                    {inviteMode
+                      ? "Scan a QR code to connect WhatsApp for this workspace, or skip for now and connect later."
+                      : "Scan a QR code with your WhatsApp to link your account"}
                   </p>
                   <button
                     onClick={startWhatsAppSetup}

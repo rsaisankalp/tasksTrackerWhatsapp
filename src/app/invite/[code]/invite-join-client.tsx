@@ -32,7 +32,7 @@ export default function InviteJoinClient({ org, inviteCode, seatsLeft, orgSlug }
       if (!res.ok) throw new Error(data.error === "no_access" ? "You need a valid invite to join." : "Sign-in failed");
       // Refresh session to pick up org membership
       await fetch("/api/auth/refresh", { method: "POST" });
-      router.replace("/dashboard");
+      router.replace(`/onboarding?invite=1&orgId=${org.id}`);
     } catch (e: any) {
       setError(e?.message ?? "Sign-in failed");
     } finally {

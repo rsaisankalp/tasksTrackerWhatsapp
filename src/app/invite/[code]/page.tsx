@@ -63,7 +63,7 @@ export default async function InvitePage({ params }: Props) {
       ]);
     }
 
-    redirect(`/api/auth/refresh?redirect=/dashboard`);
+    redirect(`/api/auth/refresh?redirect=/onboarding?invite=1&orgId=${invite.org.id}`);
   }
 
   return (
