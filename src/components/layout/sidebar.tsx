@@ -126,8 +126,7 @@ export default function Sidebar({ orgs, user }: SidebarProps) {
                   {org.name[0].toUpperCase()}
                 </div>
                 <span style={{ flex: 1, color: "#111827", fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{org.name}</span>
-                {org.type === "PERSONAL" && <span style={{ fontSize: 10, background: "rgba(139,92,246,0.2)", color: "#C4B5FD", padding: "2px 6px", borderRadius: 20, flexShrink: 0 }}>Personal</span>}
-                {org.type === "GENERAL" && <span style={{ fontSize: 10, background: "rgba(244,124,32,0.2)", color: "#FDBA74", padding: "2px 6px", borderRadius: 20, flexShrink: 0 }}>General</span>}
+                {(org.type === "PERSONAL" || org.type === "PRIVATE_USER" || org.type === "GENERAL") && <span style={{ fontSize: 10, background: "rgba(139,92,246,0.2)", color: "#7C3AED", padding: "2px 6px", borderRadius: 20, flexShrink: 0 }}>Private</span>}
                 {idx === currentOrgIdx && <svg width="14" height="14" fill="none" stroke="#F47C20" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>}
               </button>
             ))}

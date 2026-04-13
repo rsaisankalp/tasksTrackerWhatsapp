@@ -21,9 +21,27 @@ interface Org {
   _count: { projects: number; tasks: number; contacts: number };
 }
 
-export default function AdminClient({ orgs: initialOrgs }: { orgs: Org[] }) {
+interface WaitlistEntryItem {
+  id: string;
+  name: string | null;
+  email: string;
+  phone: string | null;
+  createdAt: string;
+  invitedAt: string | null;
+  invitedOrgId: string | null;
+  inviteCode: string | null;
+}
+
+export default function AdminClient({
+  orgs: initialOrgs,
+  waitlistEntries: initialWaitlistEntries,
+}: {
+  orgs: Org[];
+  waitlistEntries: WaitlistEntryItem[];
+}) {
   const router = useRouter();
   const [orgs, setOrgs] = useState(initialOrgs);
+  const [waitlistEntries] = useState(initialWaitlistEntries);
   const [expandedOrg, setExpandedOrg] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [orgName, setOrgName] = useState("");
@@ -110,6 +128,33 @@ export default function AdminClient({ orgs: initialOrgs }: { orgs: Org[] }) {
               + Create Org
             </button>
           </div>
+        </div>
+
+        <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-6">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Waitlist</h2>
+            <p className="text-sm text-gray-500">{waitlistEntries.length} people waiting for access</p>
+          </div>
+          <div className="space-y-2">
+            {waitlistEntries.slice(0, 8).map((entry) => (
+              <div key={entry.id} className="flex items-center justify-between gap-3 rounded-xl border border-gray-100 px-4 py-3">
+                <div className="min-w-0">
+                  <div className="font-medium text-gray-900">{entry.name || "—"}</div>
+                  <div className="text-sm text-gray-500 truncate">{entry.email}{entry.phone ? ` • ${entry.phone}` : ""}</div>
+                </div>
+                <div className="text-xs">
+                  {entry.invitedAt ? (
+                    <span className="rounded-full bg-green-100 px-2 py-1 font-medium text-green-700">Invited</span>
+                  ) : (
+                    <span className="rounded-full bg-amber-100 px-2 py-1 font-medium text-amber-700">Pending</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <a href="/settings?tab=waitlist" className="mt-4 inline-flex text-sm font-medium text-primary-600 hover:text-primary-700">
+            Open full waitlist manager →
+          </a>
         </div>
 
         {/* Org List */}

@@ -5,7 +5,7 @@ import { z } from "zod";
 
 const CreateOrgSchema = z.object({
   name: z.string().min(1).max(100),
-  type: z.enum(["TEAM", "GENERAL"]).default("TEAM"),
+  type: z.enum(["TEAM", "GENERAL", "PRIVATE_USER"]).default("TEAM"),
   emailDomain: z.string().regex(/^[a-z0-9.-]+\.[a-z]{2,}$/).optional(),
 });
 
@@ -61,6 +61,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { name, type, emailDomain } = parsed.data;
+  const normalizedType = type === "GENERAL" ? "PRIVATE_USER" : type;
 
   // Auto-generate slug from name
   const baseSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "org";
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
     data: {
       name,
       slug,
-      type,
+      type: normalizedType,
       ownerId: session.user.id,
       emailDomains: emailDomain ? [emailDomain.toLowerCase()] : [],
       members: { create: { userId: session.user.id, role: "OWNER" } },

@@ -73,8 +73,8 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // "PERSONAL" = auto-created private workspace; "TEAM" = shared org
-  type         String   @default("TEAM") // "PERSONAL" | "TEAM"
+  // "PERSONAL"/"PRIVATE_USER" = private workspace; "TEAM" = shared org
+  type         String   @default("TEAM") // "PERSONAL" | "PRIVATE_USER" | "TEAM"
 
   // Email of the intended owner — auto-onboards them as OWNER on first login
   ownerEmail   String?
@@ -178,6 +178,10 @@ model WaitlistEntry {
   id        String   @id @default(cuid())
   email     String   @unique
   name      String?
+  phone     String?
+  invitedAt DateTime?
+  invitedOrgId String?
+  inviteCode String?
   createdAt DateTime @default(now())
 }
 
