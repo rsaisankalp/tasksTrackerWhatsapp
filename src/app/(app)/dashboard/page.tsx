@@ -84,7 +84,13 @@ export default async function DashboardPage({
     taskWhere.OR = [{ projectId: null }, { projectId: { in: visibleProjectIdList } }];
   } else {
     taskWhere.OR = [
-      { projectId: null },
+      {
+        projectId: null,
+        OR: [
+          { createdById: session.user.id },
+          ...(myContactIds.length ? [{ executorContactId: { in: myContactIds } }] : []),
+        ],
+      },
       { project: { projectVisibility: "ALL", taskVisibility: "ALL" } },
       ...(myContactIds.length
         ? [
