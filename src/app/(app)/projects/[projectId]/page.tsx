@@ -1,4 +1,5 @@
 import { auth } from "@/auth";
+import { buildContactIdentityFilters } from "@/lib/contact-identity";
 import { prisma } from "@/lib/prisma";
 import { redirect, notFound } from "next/navigation";
 import ProjectDetailClient from "./project-detail-client";
@@ -42,10 +43,10 @@ export default async function ProjectDetailPage({
 
   const isAdmin = !!membership && ["OWNER", "ADMIN"].includes(membership.role);
   if (!isAdmin && project.projectVisibility === "TEAM_ONLY") {
-    const contactFilters = [
-      currentUserIdentity?.email ? { email: currentUserIdentity.email } : null,
-      currentUserIdentity?.phone ? { phone: currentUserIdentity.phone } : null,
-    ].filter(Boolean) as any[];
+    const contactFilters = buildContactIdentityFilters(
+      currentUserIdentity?.email,
+      currentUserIdentity?.phone
+    );
     const myContacts = contactFilters.length
       ? await prisma.contact.findMany({
           where: { orgId, OR: contactFilters },
@@ -60,10 +61,10 @@ export default async function ProjectDetailPage({
   // For OWN_ONLY visibility, find the contact matching the current user's email
   let filterContactId: string | null = null;
   if (project.taskVisibility === "OWN_ONLY") {
-    const contactFilters = [
-      currentUserIdentity?.email ? { email: currentUserIdentity.email } : null,
-      currentUserIdentity?.phone ? { phone: currentUserIdentity.phone } : null,
-    ].filter(Boolean) as any[];
+    const contactFilters = buildContactIdentityFilters(
+      currentUserIdentity?.email,
+      currentUserIdentity?.phone
+    );
 
     if (contactFilters.length) {
       const myContact = await prisma.contact.findFirst({
