@@ -41,61 +41,74 @@ export default async function DashboardPage({
     : [];
   const myContactIds = myContacts.map((contact) => contact.id);
 
-  const visibleProjects = await prisma.project.findMany({
-    where: {
-      orgId,
-      status: "ACTIVE",
-      ...(isAdmin
-        ? {}
-        : {
-            OR: [
-              { projectVisibility: "ALL" },
-              {
-                projectVisibility: "TEAM_ONLY",
-                ...(myContactIds.length
-                  ? { members: { some: { contactId: { in: myContactIds } } } }
-                  : { id: "__no_project__" }),
-              },
-            ],
-          }),
-    },
-    include: {
-      _count: { select: { tasks: { where: { parentId: null } } } },
-    },
-    orderBy: { updatedAt: "desc" },
-    take: 6,
-  });
-  const visibleProjectIds = visibleProjects.map((project) => project.id);
+  const visibleProjectWhere = {
+    orgId,
+    status: "ACTIVE" as const,
+    ...(isAdmin
+      ? {}
+      : {
+          OR: [
+            { projectVisibility: "ALL" },
+            {
+              projectVisibility: "TEAM_ONLY",
+              ...(myContactIds.length
+                ? { members: { some: { contactId: { in: myContactIds } } } }
+                : { id: "__no_project__" }),
+            },
+          ],
+        }),
+  };
+
+  const [visibleProjectIds, visibleProjects] = await Promise.all([
+    prisma.project.findMany({
+      where: visibleProjectWhere,
+      select: { id: true },
+    }),
+    prisma.project.findMany({
+      where: visibleProjectWhere,
+      include: {
+        _count: { select: { tasks: { where: { parentId: null } } } },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 6,
+    }),
+  ]);
+  const visibleProjectIdList = visibleProjectIds.map((project) => project.id);
 
   const taskWhere: any = {
     orgId,
     parentId: null,
-    ...(visibleProjectIds.length
-      ? {
-          OR: [
-            { projectId: null },
-            { projectId: { in: visibleProjectIds } },
-          ],
-        }
-      : { projectId: null }),
   };
 
-  if (!isAdmin) {
-    taskWhere.AND = [
-      {
-        OR: [
-          { project: null },
-          { project: { taskVisibility: "ALL" } },
-          {
-            project: {
-              taskVisibility: "OWN_ONLY",
+  if (isAdmin) {
+    taskWhere.OR = [{ projectId: null }, { projectId: { in: visibleProjectIdList } }];
+  } else {
+    taskWhere.OR = [
+      { projectId: null },
+      { project: { projectVisibility: "ALL", taskVisibility: "ALL" } },
+      ...(myContactIds.length
+        ? [
+            {
+              project: { projectVisibility: "ALL", taskVisibility: "OWN_ONLY" },
+              executorContactId: { in: myContactIds },
             },
-            ...(myContactIds.length
-              ? { executorContactId: { in: myContactIds } }
-              : { id: "__no_task__" }),
-          },
-        ],
-      },
+            {
+              project: {
+                projectVisibility: "TEAM_ONLY",
+                taskVisibility: "ALL",
+                members: { some: { contactId: { in: myContactIds } } },
+              },
+            },
+            {
+              project: {
+                projectVisibility: "TEAM_ONLY",
+                taskVisibility: "OWN_ONLY",
+                members: { some: { contactId: { in: myContactIds } } },
+              },
+              executorContactId: { in: myContactIds },
+            },
+          ]
+        : []),
     ];
   }
 
