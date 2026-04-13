@@ -48,7 +48,7 @@ export default function CreateTaskModal({
   const [recurringFrequency, setRecurringFrequency] = useState("WEEKLY");
   const [recurringDays, setRecurringDays] = useState<number[]>([]);
   const [recurringMonthDay, setRecurringMonthDay] = useState(1);
-  const [selfAssign, setSelfAssign] = useState(false);
+  const [selfAssign, setSelfAssign] = useState(Boolean(currentUser));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -103,7 +103,7 @@ export default function CreateTaskModal({
           eventType,
           deadline: deadline || undefined,
           executorContactId: !selfAssign ? (executorContactId || undefined) : undefined,
-          selfAssign: selfAssign || undefined,
+          selfAssign: selfAssign || (!executorContactId && Boolean(currentUser)) || undefined,
           projectId: selectedProjectId || undefined,
           parentId,
           subtasks: subtaskTitles
@@ -334,6 +334,11 @@ export default function CreateTaskModal({
                 </div>
                 {selfAssign ? "✓ Assigned to myself" : "Assign to myself"}
               </button>
+            )}
+            {selfAssign && currentUser && (
+              <p className="text-xs text-primary-600 mt-1">
+                New tasks will be assigned to {currentUser.name}.
+              </p>
             )}
             {!selfAssign && (
               <>
