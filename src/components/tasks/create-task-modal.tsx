@@ -48,7 +48,7 @@ export default function CreateTaskModal({
   const [recurringFrequency, setRecurringFrequency] = useState("WEEKLY");
   const [recurringDays, setRecurringDays] = useState<number[]>([]);
   const [recurringMonthDay, setRecurringMonthDay] = useState(1);
-  const [selfAssign, setSelfAssign] = useState(Boolean(currentUser));
+  const [selfAssign, setSelfAssign] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -103,7 +103,7 @@ export default function CreateTaskModal({
           eventType,
           deadline: deadline || undefined,
           executorContactId: !selfAssign ? (executorContactId || undefined) : undefined,
-          selfAssign: selfAssign || (!executorContactId && Boolean(currentUser)) || undefined,
+          selfAssign: selfAssign || undefined,
           projectId: selectedProjectId || undefined,
           parentId,
           subtasks: subtaskTitles
