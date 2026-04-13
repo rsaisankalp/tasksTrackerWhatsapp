@@ -68,6 +68,11 @@ interface SettingsClientProps {
   orgId: string;
   currentUserId: string;
   currentUserRole: string;
+  whatsAppDeliveryMode: "OWN" | "ORG";
+  userWaSession?: {
+    status: string;
+    phone: string | null;
+  } | null;
   isSuperAdmin?: boolean;
   allOrgs?: PlatformOrg[];
   waitlistEntries?: WaitlistEntryItem[];
@@ -100,6 +105,8 @@ export default function SettingsClient({
   orgId,
   currentUserId,
   currentUserRole,
+  whatsAppDeliveryMode: initialWhatsAppDeliveryMode,
+  userWaSession: initialUserWaSession = null,
   isSuperAdmin = false,
   allOrgs = [],
   waitlistEntries: initialWaitlistEntries = [],
@@ -135,6 +142,14 @@ export default function SettingsClient({
   const [waPhone, setWaPhone] = useState(whatsappSession?.phone ?? null);
   const [qrData, setQrData] = useState<string | null>(null);
   const [connectingWa, setConnectingWa] = useState(false);
+
+  // User-level WhatsApp (for members — persistent session)
+  const [userWaStatus, setUserWaStatus] = useState(initialUserWaSession?.status ?? "DISCONNECTED");
+  const [userWaPhone, setUserWaPhone] = useState(initialUserWaSession?.phone ?? null);
+  const [userQrData, setUserQrData] = useState<string | null>(null);
+  const [connectingUserWa, setConnectingUserWa] = useState(false);
+  const [whatsAppDeliveryMode, setWhatsAppDeliveryMode] = useState<"OWN" | "ORG">(initialWhatsAppDeliveryMode);
+  const [savingDeliveryMode, setSavingDeliveryMode] = useState(false);
 
   // Members
   const [members, setMembers] = useState<Member[]>(initialMembers);
@@ -234,6 +249,23 @@ export default function SettingsClient({
     setWaPhone(null);
     setQrData(null);
     setConnectingWa(false);
+  };
+
+  const handleDeliveryModeChange = async (mode: "OWN" | "ORG") => {
+    setWhatsAppDeliveryMode(mode);
+    setSavingDeliveryMode(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orgId, whatsAppDeliveryMode: mode }),
+      });
+      if (!res.ok) {
+        setWhatsAppDeliveryMode(initialWhatsAppDeliveryMode);
+      }
+    } finally {
+      setSavingDeliveryMode(false);
+    }
   };
 
   const handleChangeRole = async (targetUserId: string, role: string) => {
@@ -602,76 +634,217 @@ export default function SettingsClient({
         {/* WhatsApp */}
         {activeTab === "whatsapp" && (
           <div className="p-6">
-            <h2 className="text-base font-semibold text-gray-900 mb-1">WhatsApp Integration</h2>
-            <p className="text-sm text-gray-500 mb-6">
-              {isAdminOrOwner
-                ? "Connect WhatsApp to send automated task reminders"
-                : "Your organization uses a shared WhatsApp connection for reminders. Members do not need to connect a personal number."}
-            </p>
-
-            <div className={`border-2 rounded-2xl p-5 mb-6 flex items-center gap-4 ${waStatus === "CONNECTED" ? "border-green-200 bg-green-50" : "border-gray-200 bg-gray-50"}`}>
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${waStatus === "CONNECTED" ? "bg-green-500" : "bg-gray-300"}`}>
-                <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-                </svg>
+            <div className="mb-6 rounded-2xl border border-orange-100 bg-orange-50 p-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">Notification Delivery</h3>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  onClick={() => handleDeliveryModeChange("OWN")}
+                  disabled={savingDeliveryMode}
+                  className={`rounded-2xl border p-4 text-left transition ${whatsAppDeliveryMode === "OWN" ? "border-primary-500 bg-white shadow-sm" : "border-gray-200 bg-white/70 hover:border-primary-200"}`}
+                >
+                  <div className="text-sm font-semibold text-gray-900">Own WhatsApp</div>
+                  <div className="mt-1 text-xs text-gray-500">Use your linked number first. Falls back to org WhatsApp if your session is not connected.</div>
+                </button>
+                <button
+                  onClick={() => handleDeliveryModeChange("ORG")}
+                  disabled={savingDeliveryMode}
+                  className={`rounded-2xl border p-4 text-left transition ${whatsAppDeliveryMode === "ORG" ? "border-primary-500 bg-white shadow-sm" : "border-gray-200 bg-white/70 hover:border-primary-200"}`}
+                >
+                  <div className="text-sm font-semibold text-gray-900">Organization WhatsApp</div>
+                  <div className="mt-1 text-xs text-gray-500">Use the shared org sender first. Falls back to your own linked number if available.</div>
+                </button>
               </div>
-              <div className="flex-1">
-                <div className="font-medium text-gray-900">
-                  {waStatus === "CONNECTED"
-                    ? isAdminOrOwner
-                      ? "Connected"
-                      : "Organization connection active"
-                    : waStatus === "QR_PENDING"
-                      ? "Waiting for scan..."
-                      : "Disconnected"}
-                </div>
-                <div className="text-sm text-gray-500">
-                  {waStatus === "CONNECTED"
-                    ? isAdminOrOwner
-                      ? (waPhone ?? "No phone linked")
-                      : "Managed by an org admin"
-                    : "No active org connection"}
-                </div>
-              </div>
-              <div className={`w-3 h-3 rounded-full ${waStatus === "CONNECTED" ? "bg-green-500" : waStatus === "QR_PENDING" ? "bg-yellow-400 animate-pulse" : "bg-gray-300"}`} />
+              <p className="mt-3 text-xs text-gray-500">
+                Default is <strong>Own WhatsApp</strong> for members.
+              </p>
             </div>
 
-            {isMemberOnly && (
-              <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-                You joined through an invite. Task reminders will use the organization WhatsApp setup automatically when admins assign and schedule them.
-              </div>
-            )}
-
-            {qrData && (
-              <div className="text-center mb-6">
-                <p className="text-sm text-gray-600 mb-4">
-                  Scan with WhatsApp: <strong>Settings → Linked Devices → Link a Device</strong>
-                </p>
-                <div className="inline-block p-4 bg-white border-2 border-gray-200 rounded-2xl">
-                  <img src={qrData} alt="WhatsApp QR" className="w-56 h-56" />
-                </div>
-              </div>
-            )}
-
+            {/* ─── Admin/Owner: Org-level WhatsApp bot ─── */}
             {isAdminOrOwner && (
-              <div className="flex gap-3">
-                {waStatus !== "CONNECTED" ? (
-                  <button
-                    onClick={handleConnectWa}
-                    disabled={connectingWa}
-                    className="flex-1 bg-green-600 text-white py-3 rounded-xl font-medium hover:bg-green-700 disabled:opacity-50 transition-colors text-sm"
-                  >
-                    {connectingWa ? "Connecting..." : "Connect WhatsApp"}
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleDisconnectWa}
-                    className="flex-1 border border-red-200 text-red-600 py-3 rounded-xl font-medium hover:bg-red-50 transition-colors text-sm"
-                  >
-                    Disconnect
-                  </button>
+              <>
+                <h2 className="text-base font-semibold text-gray-900 mb-1">WhatsApp Integration</h2>
+                <p className="text-sm text-gray-500 mb-6">
+                  Connect WhatsApp to send automated task reminders
+                </p>
+
+                <div className={`border-2 rounded-2xl p-5 mb-6 flex items-center gap-4 ${waStatus === "CONNECTED" ? "border-green-200 bg-green-50" : "border-gray-200 bg-gray-50"}`}>
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${waStatus === "CONNECTED" ? "bg-green-500" : "bg-gray-300"}`}>
+                    <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900">
+                      {waStatus === "CONNECTED"
+                        ? "Connected"
+                        : waStatus === "QR_PENDING"
+                          ? "Waiting for scan..."
+                          : "Disconnected"}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {waStatus === "CONNECTED"
+                        ? (waPhone ?? "No phone linked")
+                        : "No active org connection"}
+                    </div>
+                  </div>
+                  <div className={`w-3 h-3 rounded-full ${waStatus === "CONNECTED" ? "bg-green-500" : waStatus === "QR_PENDING" ? "bg-yellow-400 animate-pulse" : "bg-gray-300"}`} />
+                </div>
+
+                {qrData && (
+                  <div className="text-center mb-6">
+                    <p className="text-sm text-gray-600 mb-4">
+                      Scan with WhatsApp: <strong>Settings → Linked Devices → Link a Device</strong>
+                    </p>
+                    <div className="inline-block p-4 bg-white border-2 border-gray-200 rounded-2xl">
+                      <img src={qrData} alt="WhatsApp QR" className="w-56 h-56" />
+                    </div>
+                  </div>
                 )}
-              </div>
+
+                <div className="flex gap-3">
+                  {waStatus !== "CONNECTED" ? (
+                    <button
+                      onClick={handleConnectWa}
+                      disabled={connectingWa}
+                      className="flex-1 bg-green-600 text-white py-3 rounded-xl font-medium hover:bg-green-700 disabled:opacity-50 transition-colors text-sm"
+                    >
+                      {connectingWa ? "Connecting..." : "Connect WhatsApp"}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleDisconnectWa}
+                      className="flex-1 border border-red-200 text-red-600 py-3 rounded-xl font-medium hover:bg-red-50 transition-colors text-sm"
+                    >
+                      Disconnect
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* ─── Member: User-level WhatsApp (persistent session) ─── */}
+            {isMemberOnly && (
+              <>
+                <h2 className="text-base font-semibold text-gray-900 mb-1">Your WhatsApp</h2>
+                <p className="text-sm text-gray-500 mb-6">
+                  Connect your personal WhatsApp to receive task reminders and updates
+                </p>
+
+                {/* Status card */}
+                <div className={`border-2 rounded-2xl p-5 mb-6 flex items-center gap-4 ${userWaStatus === "CONNECTED" ? "border-green-200 bg-green-50" : "border-gray-200 bg-gray-50"}`}>
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center"
+                    style={{ background: userWaStatus === "CONNECTED" ? "linear-gradient(135deg, #25D366, #128C7E)" : "#D1D5DB" }}
+                  >
+                    <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900">
+                      {userWaStatus === "CONNECTED"
+                        ? "Connected"
+                        : userWaStatus === "QR_PENDING"
+                          ? "Waiting for scan..."
+                          : "Disconnected"}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {userWaStatus === "CONNECTED"
+                        ? `+${userWaPhone ?? "unknown"}`
+                        : "Scan QR to connect your WhatsApp"}
+                    </div>
+                  </div>
+                  <div className={`w-3 h-3 rounded-full ${userWaStatus === "CONNECTED" ? "bg-green-500" : userWaStatus === "QR_PENDING" ? "bg-yellow-400 animate-pulse" : "bg-gray-300"}`} />
+                </div>
+
+                {/* QR code display */}
+                {userQrData && (
+                  <div className="text-center mb-6">
+                    <p className="text-sm text-gray-600 mb-4">
+                      Open WhatsApp on your phone → <strong>Settings → Linked Devices → Link a Device</strong>
+                    </p>
+                    <div className="inline-block p-4 bg-white border-2 border-gray-200 rounded-2xl">
+                      <img src={userQrData} alt="WhatsApp QR" className="w-56 h-56" />
+                    </div>
+                    <p className="text-xs text-gray-400 mt-3">
+                      Scan with your <strong>personal</strong> WhatsApp
+                    </p>
+                  </div>
+                )}
+
+                {/* Connect / Disconnect */}
+                <div className="flex gap-3">
+                  {userWaStatus !== "CONNECTED" ? (
+                    <button
+                      onClick={() => {
+                        setConnectingUserWa(true);
+                        setUserQrData(null);
+
+                        const es = new EventSource(`/api/user/whatsapp/qr-stream?orgId=${orgId}`);
+                        es.onmessage = (e) => {
+                          const data = JSON.parse(e.data);
+                          if (data.type === "qr") {
+                            setUserQrData(data.data);
+                            setUserWaStatus("QR_PENDING");
+                          } else if (data.type === "connected") {
+                            setUserWaStatus("CONNECTED");
+                            setUserWaPhone(data.phone);
+                            setUserQrData(null);
+                            setConnectingUserWa(false);
+                            es.close();
+                          }
+                        };
+                        es.onerror = () => {
+                          es.close();
+                          setConnectingUserWa(false);
+                        };
+                      }}
+                      disabled={connectingUserWa}
+                      className="flex-1 text-white py-3 rounded-xl font-medium disabled:opacity-50 transition-colors text-sm"
+                      style={{ background: "linear-gradient(135deg, #25D366, #128C7E)" }}
+                    >
+                      {connectingUserWa ? "Connecting..." : "Connect WhatsApp"}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={async () => {
+                        if (!confirm("Disconnect your WhatsApp?")) return;
+                        await fetch("/api/user/whatsapp", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ action: "disconnect" }),
+                        });
+                        setUserWaStatus("DISCONNECTED");
+                        setUserWaPhone(null);
+                        setUserQrData(null);
+                        setConnectingUserWa(false);
+                      }}
+                      className="flex-1 border border-red-200 text-red-600 py-3 rounded-xl font-medium hover:bg-red-50 transition-colors text-sm"
+                    >
+                      Disconnect
+                    </button>
+                  )}
+                </div>
+
+                {/* Info box */}
+                <div className="mt-5 bg-blue-50 border border-blue-100 rounded-xl p-4">
+                  <div className="flex gap-3">
+                    <div className="text-blue-500 mt-0.5">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-blue-800 mb-1">How it works</p>
+                      <ul className="text-xs text-blue-700 space-y-1">
+                        <li>• Your admin assigns tasks to you via the dashboard</li>
+                        <li>• You receive WhatsApp reminders on your linked number</li>
+                        <li>• Reply directly to update task status (e.g. &quot;done&quot;)</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         )}

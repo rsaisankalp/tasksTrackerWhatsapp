@@ -261,6 +261,17 @@ export class BaileysManager extends EventEmitter {
     return result?.key?.id ?? null;
   }
 
+  async sendUserMessage(userId: string, jid: string, text: string): Promise<string | null> {
+    const session = this.sessions.get(`user:${userId}`);
+    if (!session || session.status !== "connected") {
+      throw new Error(`WhatsApp not connected for user ${userId}`);
+    }
+
+    const formattedJid = jid.includes("@") ? jid : `${jid}@s.whatsapp.net`;
+    const result = await session.socket.sendMessage(formattedJid, { text });
+    return result?.key?.id ?? null;
+  }
+
   private async populateLidMappings(orgId: string, session: WASession): Promise<void> {
     try {
       // Fetch all executor contact phones for this org
@@ -348,12 +359,16 @@ export class BaileysManager extends EventEmitter {
     // Restore any org that has saved session files on disk (most reliable)
     const sessionsDir = path.join(process.cwd(), SESSIONS_PATH);
     let orgsWithFiles: string[] = [];
+    let usersWithFiles: string[] = [];
     if (fs.existsSync(sessionsDir)) {
-      orgsWithFiles = fs.readdirSync(sessionsDir).filter((name) => {
+      const entries = fs.readdirSync(sessionsDir).filter((name) => {
         const dir = path.join(sessionsDir, name);
-        // Only restore if there are actual credential files
         return fs.statSync(dir).isDirectory() && fs.readdirSync(dir).length > 0;
       });
+      orgsWithFiles = entries.filter((name) => !name.startsWith("user-"));
+      usersWithFiles = entries
+        .filter((name) => name.startsWith("user-"))
+        .map((name) => name.replace("user-", ""));
     }
 
     // Also restore any that DB says are connected (in case files are on another mount)
@@ -373,10 +388,188 @@ export class BaileysManager extends EventEmitter {
         console.error(`[WA] Failed to restore session for org ${orgId}:`, e);
       }
     }
+
+    // Restore user-level WhatsApp sessions
+    const dbUserConnected = await prisma.userWhatsAppSession.findMany({
+      where: { status: { in: ["CONNECTED", "CONNECTING"] } },
+      select: { userId: true },
+    });
+    const dbUserIds = dbUserConnected.map((s) => s.userId);
+    const allUserIds = [...new Set([...usersWithFiles, ...dbUserIds])];
+
+    for (const userId of allUserIds) {
+      console.log(`[WA] Restoring user session for ${userId}`);
+      try {
+        await this.startUserSession(userId);
+      } catch (e) {
+        console.error(`[WA] Failed to restore user session for ${userId}:`, e);
+      }
+    }
   }
 
   getStatus(orgId: string): string {
     return this.sessions.get(orgId)?.status ?? "disconnected";
+  }
+
+  /**
+   * Start a persistent user-level WhatsApp session for invited members.
+   * Each user gets their own Baileys session that stays connected.
+   */
+  async startUserSession(userId: string): Promise<void> {
+    const sessionKey = `user:${userId}`;
+
+    // If already connected, skip
+    const existing = this.sessions.get(sessionKey);
+    if (existing?.status === "connected") return;
+
+    // If already connecting/qr_pending, restart to get fresh QR
+    if (existing?.status === "connecting" || existing?.status === "qr_pending") {
+      try { existing.socket.end(undefined); } catch {}
+      this.sessions.delete(sessionKey);
+    }
+
+    const sessionPath = this.getUserSessionPath(userId);
+    const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
+    const { version } = await fetchLatestBaileysVersion();
+
+    const socket = makeWASocket({
+      version,
+      auth: { creds: state.creds, keys: state.keys },
+      browser: Browsers.ubuntu("TaskFlow-User"),
+      printQRInTerminal: false,
+      syncFullHistory: false,
+      generateHighQualityLinkPreview: false,
+      getMessage: async () => ({ conversation: "" }),
+    });
+
+    const session: WASession = {
+      socket,
+      status: "connecting",
+      sentGroupMessageIds: new Set(),
+      lidToPhone: new Map(),
+    };
+    this.sessions.set(sessionKey, session);
+
+    // Update DB status
+    await this.updateUserDbStatus(userId, "CONNECTING");
+
+    socket.ev.on("connection.update", async (update) => {
+      const { connection, lastDisconnect, qr } = update;
+
+      if (qr) {
+        session.status = "qr_pending";
+        await this.updateUserDbStatus(userId, "QR_PENDING");
+        this.emit(`qr:${sessionKey}`, qr);
+      }
+
+      if (connection === "open") {
+        session.status = "connected";
+        const phone = socket.user?.id?.split(":")[0] ?? null;
+        await this.updateUserDbStatus(userId, "CONNECTED", phone);
+        // Also save phone to User record
+        if (phone) {
+          await prisma.user.update({
+            where: { id: userId },
+            data: { phone },
+          }).catch(() => {});
+        }
+        this.emit(`connected:${sessionKey}`, phone);
+        console.log(`[WA] User ${userId} connected as ${phone}`);
+      }
+
+      if (connection === "close") {
+        const code = (lastDisconnect?.error as any)?.output?.statusCode;
+        const shouldReconnect = code !== DisconnectReason.loggedOut;
+
+        session.status = "disconnected";
+        await this.updateUserDbStatus(userId, "DISCONNECTED");
+        this.emit(`disconnected:${sessionKey}`, code);
+        this.sessions.delete(sessionKey);
+
+        if (shouldReconnect) {
+          console.log(`[WA] User ${userId} reconnecting (code ${code})...`);
+          setTimeout(() => this.startUserSession(userId), 5000);
+        } else {
+          console.log(`[WA] User ${userId} logged out, clearing session`);
+          this.clearUserSessionFiles(userId);
+        }
+      }
+    });
+
+    socket.ev.on("creds.update", saveCreds);
+
+    // Handle inbound messages from user's personal WhatsApp
+    socket.ev.on("messages.upsert", async ({ messages, type }) => {
+      if (type !== "notify") return;
+      for (const msg of messages) {
+        if (msg.key.fromMe) continue; // Skip messages sent by the user
+        const body =
+          msg.message?.conversation ||
+          msg.message?.extendedTextMessage?.text ||
+          msg.message?.ephemeralMessage?.message?.conversation ||
+          "";
+        if (!body) continue;
+        // Forward to webhook with user context
+        try {
+          await fetch(`${WEBHOOK_URL}/api/webhooks/whatsapp`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-webhook-secret": WEBHOOK_SECRET,
+            },
+            body: JSON.stringify({
+              userId,
+              from: msg.key.remoteJid ?? "",
+              messageId: msg.key.id ?? "",
+              body,
+              isUserSession: true,
+            }),
+          });
+        } catch (e) {
+          console.error(`[WA] Error forwarding user message for ${userId}:`, e);
+        }
+      }
+    });
+  }
+
+  async disconnectUserSession(userId: string): Promise<void> {
+    const sessionKey = `user:${userId}`;
+    const session = this.sessions.get(sessionKey);
+    if (session) {
+      await session.socket.logout();
+      this.sessions.delete(sessionKey);
+    }
+    this.clearUserSessionFiles(userId);
+    await this.updateUserDbStatus(userId, "DISCONNECTED");
+  }
+
+  getUserSessionStatus(userId: string): string {
+    return this.sessions.get(`user:${userId}`)?.status ?? "disconnected";
+  }
+
+  getUserSessionPath(userId: string): string {
+    const dir = path.join(process.cwd(), SESSIONS_PATH, `user-${userId}`);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+
+  clearUserSessionFiles(userId: string): void {
+    const dir = path.join(process.cwd(), SESSIONS_PATH, `user-${userId}`);
+    if (fs.existsSync(dir)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  private async updateUserDbStatus(
+    userId: string,
+    status: "DISCONNECTED" | "CONNECTING" | "QR_PENDING" | "CONNECTED",
+    phone?: string | null
+  ) {
+    await prisma.userWhatsAppSession.upsert({
+      where: { userId },
+      create: { userId, status, phone: phone ?? null },
+      update: { status, ...(phone !== undefined ? { phone } : {}) },
+    });
   }
 
   private async updateDbStatus(

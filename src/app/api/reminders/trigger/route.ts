@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { baileysManager } from "@/lib/whatsapp/manager";
+import { sendWhatsAppForExecutor } from "@/lib/whatsapp/delivery";
 import { formatReminderMessage } from "@/lib/reminders/rules";
 
 export const runtime = "nodejs";
@@ -46,14 +46,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No eligible tasks found" }, { status: 404 });
   }
 
-  const waStatus = baileysManager.getStatus(orgId);
-  if (waStatus !== "connected") {
-    return NextResponse.json(
-      { error: `WhatsApp not connected (status: ${waStatus}). Please scan QR in Settings first.` },
-      { status: 503 }
-    );
-  }
-
   const results: { task: string; phone: string; sent: boolean; error?: string }[] = [];
 
   for (const task of tasks) {
@@ -76,11 +68,17 @@ export async function POST(req: NextRequest) {
       task.importance
     );
 
-    const phone = task.executorContact.phone.replace(/\D/g, "");
-    const jid = `${phone}@s.whatsapp.net`;
-
     try {
-      const waMessageId = await baileysManager.sendMessage(orgId, jid, messageBody);
+      const sendResult = await sendWhatsAppForExecutor({
+        orgId,
+        phone: task.executorContact.phone,
+        executorContactId: task.executorContact.id,
+        text: messageBody,
+      });
+      if (!sendResult?.waMessageId) {
+        results.push({ task: task.title, phone: task.executorContact.phone, sent: false, error: "No connected WhatsApp session available" });
+        continue;
+      }
 
       await prisma.reminder.create({
         data: {
@@ -89,13 +87,13 @@ export async function POST(req: NextRequest) {
           status: "SENT",
           sentAt: new Date(),
           messageBody,
-          waMessageId,
+          waMessageId: sendResult.waMessageId,
         },
       });
 
-      results.push({ task: task.title, phone, sent: true });
+      results.push({ task: task.title, phone: task.executorContact.phone, sent: true });
     } catch (e: any) {
-      results.push({ task: task.title, phone, sent: false, error: e.message });
+      results.push({ task: task.title, phone: task.executorContact.phone, sent: false, error: e.message });
     }
   }
 

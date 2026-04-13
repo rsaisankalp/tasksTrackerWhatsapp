@@ -17,15 +17,31 @@ export default async function SettingsPage({
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const membership = await prisma.orgMember.findFirst({
+  const defaultMembership = await prisma.orgMember.findFirst({
     where: { userId: session.user.id },
-    select: { orgId: true, role: true },
+    select: { orgId: true },
   });
 
-  const orgId = searchParams.orgId || membership?.orgId;
+  const orgId = searchParams.orgId || defaultMembership?.orgId;
   if (!orgId) redirect("/onboarding");
 
+  const membership = await prisma.orgMember.findUnique({
+    where: { orgId_userId: { orgId, userId: session.user.id } },
+    select: { orgId: true, role: true, whatsAppDeliveryMode: true },
+  });
+  if (!membership) redirect("/dashboard");
+
   const isSuperAdmin = isPlatformAdmin(session.user.email ?? "");
+
+  const currentUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { phone: true },
+  });
+
+  const userWaSession = await prisma.userWhatsAppSession.findUnique({
+    where: { userId: session.user.id },
+    select: { status: true, phone: true },
+  });
 
   const [org, members, inviteCodes, allOrgs, waitlistEntries] = await Promise.all([
     prisma.organization.findUnique({
@@ -73,6 +89,8 @@ export default async function SettingsPage({
       orgId={orgId}
       currentUserId={session.user.id}
       currentUserRole={membership?.role ?? "MEMBER"}
+      whatsAppDeliveryMode={membership?.whatsAppDeliveryMode ?? "OWN"}
+      userWaSession={userWaSession ?? null}
       isSuperAdmin={isSuperAdmin}
       allOrgs={allOrgs.map((o) => ({
         id: o.id,

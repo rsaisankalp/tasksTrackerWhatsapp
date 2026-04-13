@@ -19,6 +19,7 @@ const SettingsSchema = z.object({
       endHour: z.number().min(1).max(24),
     })
     .optional(),
+  whatsAppDeliveryMode: z.enum(["OWN", "ORG"]).optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -33,8 +34,17 @@ export async function GET(req: NextRequest) {
   });
   if (!membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const org = await prisma.organization.findUnique({ where: { id: orgId } });
-  return NextResponse.json(org);
+  const [org, fullMembership] = await Promise.all([
+    prisma.organization.findUnique({ where: { id: orgId } }),
+    prisma.orgMember.findUnique({
+      where: { orgId_userId: { orgId, userId: session.user.id } },
+      select: { whatsAppDeliveryMode: true },
+    }),
+  ]);
+  return NextResponse.json({
+    ...org,
+    whatsAppDeliveryMode: fullMembership?.whatsAppDeliveryMode ?? "OWN",
+  });
 }
 
 export async function PATCH(req: NextRequest) {
@@ -50,7 +60,22 @@ export async function PATCH(req: NextRequest) {
   const membership = await prisma.orgMember.findUnique({
     where: { orgId_userId: { orgId, userId: session.user.id } },
   });
-  if (!membership || (membership.role !== "OWNER" && membership.role !== "ADMIN")) {
+
+  if (!membership) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (parsed.data.whatsAppDeliveryMode && updates.name === undefined && updates.emailDomains === undefined && updates.emergencyInterval === undefined && updates.highInterval === undefined && updates.midInterval === undefined && updates.lowInterval === undefined && updates.workingHoursConfig === undefined) {
+    const updatedMembership = await prisma.orgMember.update({
+      where: { orgId_userId: { orgId, userId: session.user.id } },
+      data: { whatsAppDeliveryMode: parsed.data.whatsAppDeliveryMode },
+      select: { whatsAppDeliveryMode: true },
+    });
+
+    return NextResponse.json({ whatsAppDeliveryMode: updatedMembership.whatsAppDeliveryMode });
+  }
+
+  if (membership.role !== "OWNER" && membership.role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
