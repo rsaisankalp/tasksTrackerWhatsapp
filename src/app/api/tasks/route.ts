@@ -95,7 +95,13 @@ export async function GET(req: NextRequest) {
     taskWhere.OR = [{ projectId: null }, { projectId: { not: null } }];
   } else {
     taskWhere.OR = [
-      { projectId: null },
+      {
+        projectId: null,
+        OR: [
+          { createdById: session.user.id },
+          ...(access.myContactIds.length ? [{ executorContactId: { in: access.myContactIds } }] : []),
+        ],
+      },
       { project: { projectVisibility: "ALL", taskVisibility: "ALL" } },
       ...(access.myContactIds.length
         ? [

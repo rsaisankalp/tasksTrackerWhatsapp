@@ -80,16 +80,16 @@ export default function DashboardClient({ orgId, stats, projects, tasks, current
 
   const filterLabels: Record<string, string> = {
     ALL: "All",
-    EMERGENCY: "🚨 Emergency",
-    HIGH: "🔴 High",
-    MID: "🟡 Mid",
-    LOW: "🟢 Low",
+    EMERGENCY: "Emergency",
+    HIGH: "High",
+    MID: "Mid",
+    LOW: "Low",
   };
 
   return (
-    <div style={{ padding: "28px 32px", maxWidth: 1400, margin: "0 auto" }}>
+    <div className="dashboard-shell" style={{ padding: "24px 20px 96px", maxWidth: 1400, margin: "0 auto" }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 28 }}>
+      <div className="dashboard-hero" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 28, gap: 16, flexWrap: "wrap" }}>
         <div>
           <h1 style={{ fontSize: 26, fontWeight: 800, color: "#0F172A", margin: 0, letterSpacing: "-0.5px" }}>Dashboard</h1>
           <p style={{ color: "#94A3B8", fontSize: 13, marginTop: 4 }}>
@@ -98,6 +98,7 @@ export default function DashboardClient({ orgId, stats, projects, tasks, current
         </div>
         <button
           onClick={() => setShowCreateTask(true)}
+          className="dashboard-create-btn"
           style={{ display: "flex", alignItems: "center", gap: 8, background: "linear-gradient(135deg, #F47C20, #FF9B4A)", border: "none", borderRadius: 12, padding: "11px 20px", color: "white", fontSize: 14, fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 14px rgba(244,124,32,0.4)", transition: "all 0.15s" }}
           onMouseEnter={e => (e.currentTarget.style.boxShadow = "0 6px 20px rgba(244,124,32,0.5)")}
           onMouseLeave={e => (e.currentTarget.style.boxShadow = "0 4px 14px rgba(244,124,32,0.4)")}
@@ -112,10 +113,24 @@ export default function DashboardClient({ orgId, stats, projects, tasks, current
       {/* Stat Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16, marginBottom: 24 }} className="stats-row">
         <style>{`
-          @media (max-width: 900px) { .stats-row { grid-template-columns: repeat(2, 1fr) !important; } }
-          @media (max-width: 500px) { .stats-row { grid-template-columns: 1fr 1fr !important; } }
+          @media (max-width: 900px) { .stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+          @media (max-width: 640px) { .stats-row { grid-template-columns: 1fr 1fr !important; gap: 12px !important; } }
           .stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.1) !important; }
           .stat-card { transition: all 0.2s ease; }
+          .dashboard-main-grid { display: grid; grid-template-columns: 1fr 320px; gap: 24px; }
+          .dashboard-filter-card { display: flex; flex-direction: column; align-items: stretch; gap: 10px; background: rgba(255,255,255,0.82); border: 1px solid #F1E5D3; padding: 10px; border-radius: 16px; box-shadow: 0 10px 30px rgba(244,124,32,0.08); }
+          .dashboard-filter-row { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+          .dashboard-filter-button { flex: 0 0 auto; }
+          @media (max-width: 1024px) { .dashboard-main-grid { grid-template-columns: 1fr !important; } }
+          @media (max-width: 640px) {
+            .dashboard-shell { padding: 18px 14px 92px !important; }
+            .dashboard-hero { margin-bottom: 20px !important; }
+            .dashboard-hero h1 { font-size: 22px !important; }
+            .dashboard-create-btn { width: 100%; justify-content: center; }
+            .dashboard-section-head { flex-direction: column !important; align-items: stretch !important; }
+            .dashboard-filter-card { width: 100%; padding: 12px !important; border-radius: 14px !important; }
+            .dashboard-filter-row { justify-content: flex-start !important; }
+          }
         `}</style>
         {statCards.map((s) => (
           <div key={s.label} className="stat-card" style={{ background: "white", borderRadius: 16, padding: "18px 20px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid rgba(0,0,0,0.06)", borderTop: `3px solid ${s.border}`, overflow: "hidden", position: "relative" }}>
@@ -148,28 +163,27 @@ export default function DashboardClient({ orgId, stats, projects, tasks, current
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 24 }} className="main-grid">
-        <style>{`.main-grid { @media (max-width: 1024px) { grid-template-columns: 1fr !important; } }`}</style>
-
+      <div className="dashboard-main-grid">
         {/* Tasks */}
         <div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, gap: 12 }}>
+          <div className="dashboard-section-head" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14, gap: 12 }}>
             <h2 style={{ fontSize: 15, fontWeight: 700, color: "#0F172A", margin: 0 }}>Tasks</h2>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-              <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <div className="dashboard-filter-card">
+              <div className="dashboard-filter-row">
                 {Object.entries(filterLabels).map(([key, label]) => (
-                  <button key={key} onClick={() => setPriorityFilter(key)}
-                    style={{ padding: "5px 12px", borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer", transition: "all 0.15s", border: "none",
+                  <button key={key} className="dashboard-filter-button" onClick={() => setPriorityFilter(key)}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s", border: "none",
                       background: priorityFilter === key ? "linear-gradient(135deg, #F47C20, #FF9B4A)" : "#F1F5F9",
                       color: priorityFilter === key ? "white" : "#64748B",
                       boxShadow: priorityFilter === key ? "0 2px 8px rgba(244,124,32,0.3)" : "none",
                     }}
                   >
+                    {key !== "ALL" && <span style={{ width: 8, height: 8, borderRadius: 999, background: key === "EMERGENCY" ? "#EF4444" : key === "HIGH" ? "#F97316" : key === "MID" ? "#FACC15" : "#22C55E" }} />}
                     {label}
                   </button>
                 ))}
               </div>
-              <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <div className="dashboard-filter-row">
                 {[
                   ["ALL", "All status"],
                   ["TODO", "To Do"],
@@ -177,8 +191,8 @@ export default function DashboardClient({ orgId, stats, projects, tasks, current
                   ["BLOCKED", "Blocked"],
                   ["DONE", "Done"],
                 ].map(([key, label]) => (
-                  <button key={key} onClick={() => setStatusFilter(key)}
-                    style={{ padding: "5px 12px", borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer", transition: "all 0.15s", border: "1px solid #E2E8F0",
+                  <button key={key} className="dashboard-filter-button" onClick={() => setStatusFilter(key)}
+                    style={{ padding: "8px 12px", borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s", border: "1px solid #E2E8F0",
                       background: statusFilter === key ? "#0F172A" : "white",
                       color: statusFilter === key ? "white" : "#64748B",
                       boxShadow: statusFilter === key ? "0 2px 8px rgba(15,23,42,0.18)" : "none",
