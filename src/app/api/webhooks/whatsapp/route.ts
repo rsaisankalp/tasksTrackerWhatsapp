@@ -37,11 +37,37 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { orgId, from, messageId, body, quotedMessageId, quotedBody } = await req.json();
+  const {
+    orgId: rawOrgId,
+    userId,
+    isUserSession,
+    from,
+    messageId,
+    body,
+    quotedMessageId,
+    quotedBody,
+  } = await req.json();
+
+  let orgId = rawOrgId as string | null | undefined;
+  if (!orgId && userId) {
+    const membership = await prisma.orgMember.findFirst({
+      where: { userId },
+      select: { orgId: true },
+      orderBy: { joinedAt: "asc" },
+    });
+    orgId = membership?.orgId;
+  }
 
   if (!orgId || !from || !body) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
+
+  const sendReply = async (jid: string, text: string) => {
+    if (isUserSession && userId) {
+      return baileysManager.sendUserMessage(userId, jid, text);
+    }
+    return baileysManager.sendMessage(orgId, jid, text);
+  };
 
   // Deduplicate: skip if we've already processed this message ID
   if (messageId && isAlreadyProcessed(messageId)) {
@@ -131,7 +157,7 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        await baileysManager.sendMessage(orgId, jid, reply).catch(console.error);
+        await sendReply(jid, reply).catch(console.error);
         return NextResponse.json({ success: true, processed: true, intent: "list_tasks" });
       }
 
@@ -338,7 +364,7 @@ export async function POST(req: NextRequest) {
 
     // Send reply if AI has one
     if (aiResult.replyMessage) {
-      await baileysManager.sendMessage(orgId, jid, aiResult.replyMessage).catch(console.error);
+      await sendReply(jid, aiResult.replyMessage).catch(console.error);
     }
 
     return NextResponse.json({

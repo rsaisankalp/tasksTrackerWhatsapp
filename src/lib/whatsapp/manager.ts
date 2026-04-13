@@ -509,6 +509,10 @@ export class BaileysManager extends EventEmitter {
           msg.message?.ephemeralMessage?.message?.conversation ||
           "";
         if (!body) continue;
+        const quotedBody =
+          msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.conversation ||
+          msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.extendedTextMessage?.text ||
+          null;
         // Forward to webhook with user context
         try {
           await fetch(`${WEBHOOK_URL}/api/webhooks/whatsapp`, {
@@ -522,6 +526,9 @@ export class BaileysManager extends EventEmitter {
               from: msg.key.remoteJid ?? "",
               messageId: msg.key.id ?? "",
               body,
+              quotedMessageId:
+                msg.message?.extendedTextMessage?.contextInfo?.stanzaId ?? null,
+              quotedBody: quotedBody ?? null,
               isUserSession: true,
             }),
           });
