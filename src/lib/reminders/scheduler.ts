@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { prisma } from "@/lib/prisma";
-import { baileysManager } from "@/lib/whatsapp/manager";
+import { sendWhatsAppForExecutor } from "@/lib/whatsapp/delivery";
 import { shouldSendReminder, formatReminderMessage } from "./rules";
 import type { WorkingHoursConfig } from "@/types";
 
@@ -87,10 +87,6 @@ async function checkAndSendReminders() {
 
       if (!shouldSend) continue;
 
-      // Check WhatsApp connection
-      const waStatus = baileysManager.getStatus(task.orgId);
-      if (waStatus !== "connected") continue;
-
       // Format ALL subtasks with fixed indices (so user can always reference by number)
       const subtasksFormatted = task.subtasks.map((sub, i) => ({
         index: i + 1,
@@ -109,15 +105,13 @@ async function checkAndSendReminders() {
         magicLink
       );
 
-      // Format phone: ensure E.164 → WhatsApp JID
-      const phone = task.executorContact.phone!.replace(/\D/g, "");
-      const jid = `${phone}@s.whatsapp.net`;
-
-      const waMessageId = await baileysManager.sendMessage(
-        task.orgId,
-        jid,
-        messageBody
-      );
+      const sendResult = await sendWhatsAppForExecutor({
+        orgId: task.orgId,
+        phone: task.executorContact.phone!,
+        executorContactId: task.executorContact.id,
+        text: messageBody,
+      });
+      if (!sendResult?.waMessageId) continue;
 
       // Record reminder
       await prisma.reminder.create({
@@ -127,12 +121,12 @@ async function checkAndSendReminders() {
           status: "SENT",
           sentAt: now,
           messageBody,
-          waMessageId,
+          waMessageId: sendResult.waMessageId,
         },
       });
 
       console.log(
-        `[Scheduler] Sent reminder for task "${task.title}" to ${phone}`
+        `[Scheduler] Sent reminder for task "${task.title}" to ${task.executorContact.phone}`
       );
     } catch (e) {
       console.error(`[Scheduler] Error sending reminder for task ${task.id}:`, e);

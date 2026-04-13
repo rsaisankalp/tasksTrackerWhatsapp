@@ -4,7 +4,7 @@ import { buildContactIdentityFilters } from "@/lib/contact-identity";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { formatReminderMessage } from "@/lib/reminders/rules";
-import { baileysManager } from "@/lib/whatsapp/manager";
+import { sendWhatsAppForExecutor } from "@/lib/whatsapp/delivery";
 import { nanoid } from "nanoid";
 
 const APP_URL = process.env.APP_URL ?? "https://tasks.vaidicpujas.in";
@@ -302,26 +302,24 @@ export async function POST(req: NextRequest) {
         magicLink
       );
 
-      const waSession = await prisma.whatsAppSession.findUnique({
-        where: { orgId },
-        select: { status: true },
+      const sendResult = await sendWhatsAppForExecutor({
+        orgId,
+        phone: contact.phone!,
+        executorContactId: contact.id,
+        text: msg,
       });
-      if (waSession?.status === "CONNECTED") {
-        const phone = contact.phone!.replace(/\D/g, "");
-        const waMessageId = await baileysManager.sendMessage(orgId, phone, msg);
-        // Save reminder record so quoted replies can be matched
-        if (waMessageId) {
-          await prisma.reminder.create({
-            data: {
-              orgId,
-              taskId: task.id,
-              status: "SENT",
-              sentAt: new Date(),
-              messageBody: msg,
-              waMessageId,
-            },
-          });
-        }
+
+      if (sendResult?.waMessageId) {
+        await prisma.reminder.create({
+          data: {
+            orgId,
+            taskId: task.id,
+            status: "SENT",
+            sentAt: new Date(),
+            messageBody: msg,
+            waMessageId: sendResult.waMessageId,
+          },
+        });
       }
     } catch (err) {
       console.error("[tasks/POST] WhatsApp notification failed:", err);
