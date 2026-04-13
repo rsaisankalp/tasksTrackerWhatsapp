@@ -16,17 +16,22 @@ export default async function AdminPage() {
   if (!session?.user?.id) redirect("/login");
   if (!isPlatformAdmin(session.user.email ?? "")) redirect("/dashboard");
 
-  const orgs = await prisma.organization.findMany({
-    include: {
-      owner: { select: { name: true, email: true } },
-      members: {
+  const [orgs, waitlistEntries] = await Promise.all([
+    prisma.organization.findMany({
+      include: {
+        owner: { select: { name: true, email: true } },
+        members: {
         include: { user: { select: { id: true, name: true, email: true } } },
         orderBy: { role: "asc" },
       },
       _count: { select: { projects: true, tasks: true, contacts: true } },
     },
     orderBy: { createdAt: "desc" },
-  });
+    }),
+    prisma.waitlistEntry.findMany({
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
 
   return (
     <AdminClient
@@ -44,6 +49,16 @@ export default async function AdminPage() {
           user: m.user,
         })),
         _count: o._count,
+      }))}
+      waitlistEntries={waitlistEntries.map((entry) => ({
+        id: entry.id,
+        name: entry.name,
+        email: entry.email,
+        phone: entry.phone,
+        createdAt: entry.createdAt.toISOString(),
+        invitedAt: entry.invitedAt?.toISOString() ?? null,
+        invitedOrgId: entry.invitedOrgId ?? null,
+        inviteCode: entry.inviteCode ?? null,
       }))}
     />
   );

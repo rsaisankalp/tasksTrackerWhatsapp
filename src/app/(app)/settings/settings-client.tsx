@@ -45,12 +45,24 @@ interface PlatformOrg {
   _count: { projects: number; tasks: number };
 }
 
+interface WaitlistEntryItem {
+  id: string;
+  name: string | null;
+  email: string;
+  phone: string | null;
+  createdAt: string;
+  invitedAt: string | null;
+  invitedOrgId: string | null;
+  inviteCode: string | null;
+}
+
 interface SettingsClientProps {
   orgId: string;
   currentUserId: string;
   currentUserRole: string;
   isSuperAdmin?: boolean;
   allOrgs?: PlatformOrg[];
+  waitlistEntries?: WaitlistEntryItem[];
   initialTab: string;
   org: {
     id: string;
@@ -82,6 +94,7 @@ export default function SettingsClient({
   currentUserRole,
   isSuperAdmin = false,
   allOrgs = [],
+  waitlistEntries: initialWaitlistEntries = [],
   initialTab,
   org,
   whatsappSession,
@@ -132,7 +145,7 @@ export default function SettingsClient({
   const [newOrgName, setNewOrgName] = useState("");
   const [newOrgSlug, setNewOrgSlug] = useState("");
   const [newOwnerEmail, setNewOwnerEmail] = useState("");
-  const [newOrgType, setNewOrgType] = useState<"TEAM" | "GENERAL">("TEAM");
+  const [newOrgType, setNewOrgType] = useState<"TEAM" | "PRIVATE_USER">("TEAM");
   const [creatingOrg, setCreatingOrg] = useState(false);
   const [platformError, setPlatformError] = useState("");
   const [showCreateInvite, setShowCreateInvite] = useState(false);
@@ -141,6 +154,13 @@ export default function SettingsClient({
   const [inviteExpiryDays, setInviteExpiryDays] = useState<number | "">("");
   const [creatingPlatformInvite, setCreatingPlatformInvite] = useState(false);
   const [platformInviteResult, setPlatformInviteResult] = useState<string | null>(null);
+  const [waitlistEntries, setWaitlistEntries] = useState<WaitlistEntryItem[]>(initialWaitlistEntries);
+  const [selectedWaitlistIds, setSelectedWaitlistIds] = useState<string[]>([]);
+  const [waitlistOrgId, setWaitlistOrgId] = useState(
+    allOrgs.find((item) => item.type === "PRIVATE_USER" || item.type === "GENERAL" || item.name === "Private User")?.id ?? ""
+  );
+  const [invitingWaitlist, setInvitingWaitlist] = useState(false);
+  const [waitlistInviteResults, setWaitlistInviteResults] = useState<string[]>([]);
 
   const isOwner = currentUserRole === "OWNER";
   const isAdminOrOwner = ["OWNER", "ADMIN"].includes(currentUserRole);
@@ -273,10 +293,64 @@ export default function SettingsClient({
     { id: "whatsapp", label: "WhatsApp" },
     ...(isAdminOrOwner ? [{ id: "members", label: "Members" }] : []),
     ...(isAdminOrOwner ? [{ id: "invites", label: "Invites" }] : []),
+    ...(isSuperAdmin ? [{ id: "waitlist", label: "Waitlist" }] : []),
     ...(isSuperAdmin ? [{ id: "platform", label: "🛡️ Platform" }] : []),
   ];
 
-  const noSaveButton = ["whatsapp", "members", "invites", "platform"].includes(activeTab) || !isAdminOrOwner;
+  const noSaveButton = ["whatsapp", "members", "invites", "waitlist", "platform"].includes(activeTab) || !isAdminOrOwner;
+
+  const privateUserOrg =
+    platformOrgs.find((item) => item.type === "PRIVATE_USER" || item.type === "GENERAL" || item.name === "Private User")?.id ?? "";
+
+  const inviteWaitlist = async (ids: string[]) => {
+    if (!ids.length || !waitlistOrgId) return;
+    setInvitingWaitlist(true);
+    setWaitlistInviteResults([]);
+    try {
+      const res = await fetch("/api/waitlist/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ids,
+          orgId: waitlistOrgId,
+          maxUses: 1,
+          expiresInDays: 14,
+          sendEmail: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to invite waitlist entries");
+      }
+      const invitedAt = new Date().toISOString();
+      const resultMap = new Map<string, { inviteUrl: string }>(
+        (data.results ?? []).map((result: any) => [result.id, result])
+      );
+
+      setWaitlistEntries((prev) =>
+        prev.map((entry) =>
+          resultMap.has(entry.id)
+            ? {
+                ...entry,
+                invitedAt,
+                invitedOrgId: waitlistOrgId,
+                inviteCode: resultMap.get(entry.id)!.inviteUrl.split("/").pop() ?? null,
+              }
+            : entry
+        )
+      );
+      setSelectedWaitlistIds([]);
+      setWaitlistInviteResults(
+        (data.results ?? []).map((result: any) =>
+          `${result.email} → ${result.emailed ? "email sent" : "invite generated"}`
+        )
+      );
+    } catch (error: any) {
+      setWaitlistInviteResults([error?.message ?? "Failed to invite waitlist entries"]);
+    } finally {
+      setInvitingWaitlist(false);
+    }
+  };
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-3xl mx-auto">
@@ -732,6 +806,128 @@ export default function SettingsClient({
         )}
 
         {/* Platform Tab */}
+        {activeTab === "waitlist" && isSuperAdmin && (
+          <div className="p-6 space-y-5">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">Waitlist</h2>
+                <p className="text-sm text-gray-500">
+                  Admin invite queue for early-access users
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={waitlistOrgId}
+                  onChange={(e) => setWaitlistOrgId(e.target.value)}
+                  className="max-w-[220px] border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">Select target org</option>
+                  {platformOrgs.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                      {item.type === "PRIVATE_USER" || item.type === "GENERAL" ? " · Private User" : ""}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => inviteWaitlist(selectedWaitlistIds)}
+                  disabled={!selectedWaitlistIds.length || !waitlistOrgId || invitingWaitlist}
+                  className="rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {invitingWaitlist ? "Inviting..." : `Invite Selected (${selectedWaitlistIds.length})`}
+                </button>
+              </div>
+            </div>
+
+            {!privateUserOrg && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                No `Private User` org exists yet. Create one from the Platform tab and use it as the default invite target for waitlist users.
+              </div>
+            )}
+
+            {waitlistInviteResults.length > 0 && (
+              <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                {waitlistInviteResults.map((item) => (
+                  <div key={item}>{item}</div>
+                ))}
+              </div>
+            )}
+
+            <div className="overflow-hidden rounded-2xl border border-gray-200">
+              <div className="grid grid-cols-[40px,minmax(0,1.2fr),minmax(0,1fr),minmax(0,1fr),120px,120px] gap-3 border-b border-gray-100 bg-gray-50 px-4 py-3 text-xs font-medium uppercase tracking-wide text-gray-500">
+                <label className="flex items-center justify-center">
+                  <input
+                    type="checkbox"
+                    checked={waitlistEntries.length > 0 && selectedWaitlistIds.length === waitlistEntries.length}
+                    onChange={(e) =>
+                      setSelectedWaitlistIds(e.target.checked ? waitlistEntries.map((item) => item.id) : [])
+                    }
+                  />
+                </label>
+                <div>Name</div>
+                <div>Email</div>
+                <div>Phone</div>
+                <div>Status</div>
+                <div>Action</div>
+              </div>
+              {waitlistEntries.length === 0 ? (
+                <div className="px-4 py-8 text-center text-sm text-gray-400">No waitlist entries</div>
+              ) : (
+                waitlistEntries.map((entry) => {
+                  const selected = selectedWaitlistIds.includes(entry.id);
+                  return (
+                    <div
+                      key={entry.id}
+                      className="grid grid-cols-[40px,minmax(0,1.2fr),minmax(0,1fr),minmax(0,1fr),120px,120px] gap-3 border-t border-gray-100 px-4 py-3 text-sm"
+                    >
+                      <label className="flex items-center justify-center">
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={(e) =>
+                            setSelectedWaitlistIds((prev) =>
+                              e.target.checked ? [...prev, entry.id] : prev.filter((id) => id !== entry.id)
+                            )
+                          }
+                        />
+                      </label>
+                      <div className="min-w-0">
+                        <div className="truncate font-medium text-gray-900">{entry.name || "—"}</div>
+                        <div className="text-xs text-gray-400">
+                          Joined {new Date(entry.createdAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                      <div className="min-w-0 truncate text-gray-700">{entry.email}</div>
+                      <div className="min-w-0 truncate text-gray-700">{entry.phone || "—"}</div>
+                      <div className="text-xs">
+                        {entry.invitedAt ? (
+                          <span className="rounded-full bg-green-100 px-2 py-1 font-medium text-green-700">
+                            Invited
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-amber-100 px-2 py-1 font-medium text-amber-700">
+                            Pending
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <button
+                          onClick={() => inviteWaitlist([entry.id])}
+                          disabled={!waitlistOrgId || invitingWaitlist}
+                          className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Invite
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Platform Tab */}
         {activeTab === "platform" && isSuperAdmin && (
           <div className="space-y-6">
             <div className="flex items-center justify-between flex-wrap gap-2">
@@ -765,7 +961,7 @@ export default function SettingsClient({
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-gray-900 text-sm">{o.name}</span>
                       <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{o.slug}</span>
-                      {o.type === "PERSONAL" && (
+                      {(o.type === "PERSONAL" || o.type === "PRIVATE_USER" || o.type === "GENERAL") && (
                         <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-medium">Personal</span>
                       )}
                     </div>
@@ -966,12 +1162,12 @@ export default function SettingsClient({
                       <div className="flex gap-2">
                         {[
                           { value: "TEAM", label: "Team", desc: "Shared contacts & tasks" },
-                          { value: "GENERAL", label: "General", desc: "Private contacts per user" },
+                          { value: "PRIVATE_USER", label: "Private User", desc: "Private contacts per user" },
                         ].map((opt) => (
                           <button
                             key={opt.value}
                             type="button"
-                            onClick={() => setNewOrgType(opt.value as "TEAM" | "GENERAL")}
+                            onClick={() => setNewOrgType(opt.value as "TEAM" | "PRIVATE_USER")}
                             className={`flex-1 p-3 rounded-xl border text-left text-sm transition-all ${newOrgType === opt.value ? "border-primary-500 bg-primary-50 text-primary-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
                           >
                             <div className="font-medium">{opt.label}</div>

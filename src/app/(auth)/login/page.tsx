@@ -14,6 +14,7 @@ function LoginPageInner() {
   const [showLogin, setShowLogin] = useState(false);
   const [waitlistName, setWaitlistName] = useState("");
   const [waitlistEmail, setWaitlistEmail] = useState("");
+  const [waitlistPhone, setWaitlistPhone] = useState("");
   const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
   const [waitlistDone, setWaitlistDone] = useState(false);
 
@@ -65,7 +66,7 @@ function LoginPageInner() {
       const res = await fetch("/api/waitlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: waitlistName, email: waitlistEmail }),
+        body: JSON.stringify({ name: waitlistName, email: waitlistEmail, phone: waitlistPhone }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -171,7 +172,7 @@ function LoginPageInner() {
                   </div>
                 ) : (
                   <div style={{ maxWidth: 460 }}>
-                    <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+                    <div style={{ display: "flex", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
                       <input
                         type="text"
                         value={waitlistName}
@@ -182,12 +183,21 @@ function LoginPageInner() {
                         onBlur={e => (e.target.style.borderColor = "rgba(255,255,255,0.1)")}
                       />
                       <input
+                        type="tel"
+                        value={waitlistPhone}
+                        onChange={e => setWaitlistPhone(e.target.value)}
+                        placeholder="+91 98765 43210"
+                        style={{ flex: 1, minWidth: 160, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "13px 16px", color: "white", fontSize: 14, outline: "none", transition: "border-color 0.15s" }}
+                        onFocus={e => (e.target.style.borderColor = "rgba(244,124,32,0.5)")}
+                        onBlur={e => (e.target.style.borderColor = "rgba(255,255,255,0.1)")}
+                      />
+                      <input
                         id="waitlist-email"
                         type="email"
                         value={waitlistEmail}
                         onChange={e => setWaitlistEmail(e.target.value)}
                         placeholder="your@email.com"
-                        style={{ flex: 1.5, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "13px 16px", color: "white", fontSize: 14, outline: "none", transition: "border-color 0.15s" }}
+                        style={{ flex: 1.5, minWidth: 220, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "13px 16px", color: "white", fontSize: 14, outline: "none", transition: "border-color 0.15s" }}
                         onFocus={e => (e.target.style.borderColor = "rgba(244,124,32,0.5)")}
                         onBlur={e => (e.target.style.borderColor = "rgba(255,255,255,0.1)")}
                         onKeyDown={e => e.key === "Enter" && handleWaitlist()}

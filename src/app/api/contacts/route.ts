@@ -41,13 +41,14 @@ export async function GET(req: NextRequest) {
   ]);
   if (!membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  // GENERAL orgs: each user only sees their own contacts
-  const isGeneral = org?.type === "GENERAL";
+  // Private-contact orgs: each user only sees their own contacts.
+  const isPrivateContactsOrg =
+    org?.type === "GENERAL" || org?.type === "PRIVATE_USER" || org?.type === "PERSONAL";
 
   const contacts = await prisma.contact.findMany({
     where: {
       orgId,
-      ...(isGeneral ? { createdByUserId: session.user.id } : {}),
+      ...(isPrivateContactsOrg ? { createdByUserId: session.user.id } : {}),
       ...(search
         ? {
             OR: [
@@ -101,8 +102,13 @@ export async function POST(req: NextRequest) {
       department: contactData.department || null,
       trustLevel: contactData.trustLevel,
       avatarUrl: contactData.avatarUrl || null,
-      // For GENERAL orgs, track which user created this contact
-      createdByUserId: orgForCreate?.type === "GENERAL" ? session.user.id : null,
+      // For private-contact orgs, track which user created this contact.
+      createdByUserId:
+        orgForCreate?.type === "GENERAL" ||
+        orgForCreate?.type === "PRIVATE_USER" ||
+        orgForCreate?.type === "PERSONAL"
+          ? session.user.id
+          : null,
     },
   });
 

@@ -27,7 +27,7 @@ export default async function SettingsPage({
 
   const isSuperAdmin = isPlatformAdmin(session.user.email ?? "");
 
-  const [org, members, inviteCodes, allOrgs] = await Promise.all([
+  const [org, members, inviteCodes, allOrgs, waitlistEntries] = await Promise.all([
     prisma.organization.findUnique({
       where: { id: orgId },
       include: { whatsappSession: true },
@@ -55,6 +55,11 @@ export default async function SettingsPage({
           orderBy: { createdAt: "desc" },
         })
       : Promise.resolve([]),
+    isSuperAdmin
+      ? prisma.waitlistEntry.findMany({
+          orderBy: { createdAt: "desc" },
+        })
+      : Promise.resolve([]),
   ]);
 
   if (!org) redirect("/dashboard");
@@ -79,6 +84,16 @@ export default async function SettingsPage({
           user: m.user,
         })),
         _count: o._count,
+      }))}
+      waitlistEntries={waitlistEntries.map((entry) => ({
+        id: entry.id,
+        name: entry.name,
+        email: entry.email,
+        phone: entry.phone,
+        createdAt: entry.createdAt.toISOString(),
+        invitedAt: entry.invitedAt?.toISOString() ?? null,
+        invitedOrgId: entry.invitedOrgId ?? null,
+        inviteCode: entry.inviteCode ?? null,
       }))}
       initialTab={searchParams.tab ?? "general"}
       org={{
