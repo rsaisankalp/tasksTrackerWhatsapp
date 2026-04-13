@@ -791,6 +791,7 @@ export default function SettingsClient({
                             setUserWaPhone(data.phone);
                             setUserQrData(null);
                             setConnectingUserWa(false);
+                            setWhatsAppDeliveryMode("OWN");
                             es.close();
                           }
                         };
@@ -812,12 +813,15 @@ export default function SettingsClient({
                         await fetch("/api/user/whatsapp", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ action: "disconnect" }),
+                          body: JSON.stringify({ action: "disconnect", orgId }),
                         });
                         setUserWaStatus("DISCONNECTED");
                         setUserWaPhone(null);
                         setUserQrData(null);
                         setConnectingUserWa(false);
+                        if (waStatus === "CONNECTED") {
+                          setWhatsAppDeliveryMode("ORG");
+                        }
                       }}
                       className="flex-1 border border-red-200 text-red-600 py-3 rounded-xl font-medium hover:bg-red-50 transition-colors text-sm"
                     >

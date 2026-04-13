@@ -84,12 +84,19 @@ export default async function SettingsPage({
 
   if (!org) redirect("/dashboard");
 
+  const effectiveWhatsAppDeliveryMode =
+    userWaSession?.status === "CONNECTED"
+      ? membership.whatsAppDeliveryMode ?? "OWN"
+      : org.whatsappSession?.status === "CONNECTED"
+        ? "ORG"
+        : membership.whatsAppDeliveryMode ?? "OWN";
+
   return (
     <SettingsClient
       orgId={orgId}
       currentUserId={session.user.id}
       currentUserRole={membership?.role ?? "MEMBER"}
-      whatsAppDeliveryMode={membership?.whatsAppDeliveryMode ?? "OWN"}
+      whatsAppDeliveryMode={effectiveWhatsAppDeliveryMode}
       userWaSession={userWaSession ?? null}
       isSuperAdmin={isSuperAdmin}
       allOrgs={allOrgs.map((o) => ({
