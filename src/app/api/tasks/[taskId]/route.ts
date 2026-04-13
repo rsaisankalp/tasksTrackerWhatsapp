@@ -2,6 +2,38 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
+async function getTaskAccessContext(orgId: string, userId: string) {
+  const [membership, user] = await Promise.all([
+    prisma.orgMember.findUnique({
+      where: { orgId_userId: { orgId, userId } },
+    }),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, phone: true },
+    }),
+  ]);
+
+  if (!membership) return null;
+
+  const isAdmin = ["OWNER", "ADMIN"].includes(membership.role);
+  const contactFilters = [
+    user?.email ? { email: user.email } : null,
+    user?.phone ? { phone: user.phone } : null,
+  ].filter(Boolean) as any[];
+
+  const myContacts = contactFilters.length
+    ? await prisma.contact.findMany({
+        where: { orgId, OR: contactFilters },
+        select: { id: true },
+      })
+    : [];
+
+  return {
+    isAdmin,
+    myContactIds: myContacts.map((contact) => contact.id),
+  };
+}
+
 async function getTask(taskId: string, userId: string) {
   const task = await prisma.task.findUnique({
     where: { id: taskId },
@@ -14,7 +46,16 @@ async function getTask(taskId: string, userId: string) {
         },
         orderBy: { createdAt: "asc" },
       },
-      project: { select: { id: true, name: true, color: true } },
+      project: {
+        select: {
+          id: true,
+          name: true,
+          color: true,
+          projectVisibility: true,
+          taskVisibility: true,
+          members: { select: { contactId: true } },
+        },
+      },
       reminders: {
         orderBy: { createdAt: "desc" },
         take: 10,
@@ -23,6 +64,32 @@ async function getTask(taskId: string, userId: string) {
   });
 
   if (!task || task.org.members.length === 0) return null;
+
+  const access = await getTaskAccessContext(task.orgId, userId);
+  if (!access) return null;
+
+  if (task.projectId && task.project && !access.isAdmin) {
+    const isProjectMember = task.project.members.some((member) =>
+      access.myContactIds.includes(member.contactId)
+    );
+    const allowedByProjectVisibility =
+      task.project.projectVisibility === "ALL" ||
+      (task.project.projectVisibility === "TEAM_ONLY" &&
+        task.project.members.some((member) =>
+          access.myContactIds.includes(member.contactId)
+        ));
+
+    if (!allowedByProjectVisibility) return null;
+
+    if (
+      task.project.taskVisibility === "OWN_ONLY" &&
+      task.executorContactId &&
+      !access.myContactIds.includes(task.executorContactId)
+    ) {
+      return null;
+    }
+  }
+
   return task;
 }
 

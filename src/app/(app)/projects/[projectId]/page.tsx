@@ -19,6 +19,16 @@ export default async function ProjectDetailPage({
 
   if (!orgId) redirect("/onboarding");
 
+  const [membership, currentUserIdentity] = await Promise.all([
+    prisma.orgMember.findUnique({
+      where: { orgId_userId: { orgId, userId: session.user.id } },
+    }),
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { email: true, phone: true, name: true },
+    }),
+  ]);
+
   const project = await prisma.project.findFirst({
     where: { id: params.projectId, orgId },
     include: {
@@ -30,23 +40,42 @@ export default async function ProjectDetailPage({
 
   if (!project) notFound();
 
+  const isAdmin = !!membership && ["OWNER", "ADMIN"].includes(membership.role);
+  if (!isAdmin && project.projectVisibility === "TEAM_ONLY") {
+    const contactFilters = [
+      currentUserIdentity?.email ? { email: currentUserIdentity.email } : null,
+      currentUserIdentity?.phone ? { phone: currentUserIdentity.phone } : null,
+    ].filter(Boolean) as any[];
+    const myContacts = contactFilters.length
+      ? await prisma.contact.findMany({
+          where: { orgId, OR: contactFilters },
+          select: { id: true },
+        })
+      : [];
+    const myContactIds = new Set(myContacts.map((contact) => contact.id));
+    const allowed = project.members.some((member) => myContactIds.has(member.contactId));
+    if (!allowed) notFound();
+  }
+
   // For OWN_ONLY visibility, find the contact matching the current user's email
   let filterContactId: string | null = null;
-  if (project.taskVisibility === "OWN_ONLY" && session.user.email) {
-    const myContact = await prisma.contact.findFirst({
-      where: { orgId, email: session.user.email },
-      select: { id: true },
-    });
-    filterContactId = myContact?.id ?? null;
+  if (project.taskVisibility === "OWN_ONLY") {
+    const contactFilters = [
+      currentUserIdentity?.email ? { email: currentUserIdentity.email } : null,
+      currentUserIdentity?.phone ? { phone: currentUserIdentity.phone } : null,
+    ].filter(Boolean) as any[];
+
+    if (contactFilters.length) {
+      const myContact = await prisma.contact.findFirst({
+        where: { orgId, OR: contactFilters },
+        select: { id: true },
+      });
+      filterContactId = myContact?.id ?? null;
+    }
   }
 
   const taskFilter: any = { projectId: params.projectId, parentId: null };
   // Owner/admin always sees all tasks; regular members filtered by visibility
-  const membership = await prisma.orgMember.findUnique({
-    where: { orgId_userId: { orgId, userId: session.user.id } },
-  });
-  const isAdmin = membership && ["OWNER", "ADMIN"].includes(membership.role);
-
   if (project.taskVisibility === "OWN_ONLY" && !isAdmin && filterContactId) {
     taskFilter.executorContactId = filterContactId;
   }
@@ -85,6 +114,7 @@ export default async function ProjectDetailPage({
         description: project.description,
         color: project.color,
         status: project.status,
+        projectVisibility: project.projectVisibility,
         taskVisibility: project.taskVisibility,
         taskCreation: project.taskCreation,
         startDate: project.startDate?.toISOString() ?? null,

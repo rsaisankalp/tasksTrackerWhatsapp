@@ -40,6 +40,7 @@ interface ProjectDetailClientProps {
     description: string | null;
     color: string;
     status: string;
+    projectVisibility?: string;
     taskVisibility?: string;
     taskCreation?: string;
     startDate?: string | null;
@@ -76,6 +77,7 @@ export default function ProjectDetailClient({
   const [editName, setEditName] = useState(initialProject.name);
   const [editDescription, setEditDescription] = useState(initialProject.description ?? "");
   const [editColor, setEditColor] = useState(initialProject.color);
+  const [editProjectVisibility, setEditProjectVisibility] = useState<"ALL" | "TEAM_ONLY">((initialProject.projectVisibility as any) ?? "TEAM_ONLY");
   const [editVisibility, setEditVisibility] = useState<"ALL" | "OWN_ONLY">((initialProject.taskVisibility as any) ?? "ALL");
   const [editTaskCreation, setEditTaskCreation] = useState<"ANYONE" | "TEAM_ONLY">((initialProject.taskCreation as any) ?? "ANYONE");
   const [editMemberIds, setEditMemberIds] = useState<string[]>((initialProject.members ?? []).map((m) => m.contactId));
@@ -100,6 +102,7 @@ export default function ProjectDetailClient({
           name: editName,
           description: editDescription || null,
           color: editColor,
+          projectVisibility: editProjectVisibility,
           taskVisibility: editVisibility,
           taskCreation: editTaskCreation,
           memberContactIds: editMemberIds,
@@ -112,6 +115,7 @@ export default function ProjectDetailClient({
           name: updated.name,
           description: updated.description,
           color: updated.color,
+          projectVisibility: updated.projectVisibility,
           taskVisibility: updated.taskVisibility,
           taskCreation: updated.taskCreation,
           members: (updated.members ?? []).map((m: any) => ({
@@ -169,6 +173,9 @@ export default function ProjectDetailClient({
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: project.color }} />
             <h1 className="text-lg md:text-xl font-bold text-gray-900 truncate">{project.name}</h1>
+            {project.projectVisibility === "TEAM_ONLY" && (
+              <span className="flex-shrink-0 text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">Team only</span>
+            )}
             {project.taskVisibility === "OWN_ONLY" && !isAdmin && (
               <span className="flex-shrink-0 text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">My tasks</span>
             )}
@@ -428,6 +435,23 @@ export default function ProjectDetailClient({
                       className={`w-8 h-8 rounded-lg border-2 transition-all ${editColor === c ? "border-gray-800 scale-110" : "border-transparent hover:scale-105"}`}
                       style={{ backgroundColor: c }} />
                   ))}
+                </div>
+              </div>
+
+              {/* Project Visibility */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Project Visibility</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => setEditProjectVisibility("ALL")}
+                    className={`p-3 rounded-xl border-2 text-left transition-all ${editProjectVisibility === "ALL" ? "border-primary-500 bg-primary-50" : "border-gray-200"}`}>
+                    <div className="text-sm font-medium text-gray-900 mb-0.5">Everyone in org</div>
+                    <div className="text-xs text-gray-500">Project is visible to the full org</div>
+                  </button>
+                  <button onClick={() => setEditProjectVisibility("TEAM_ONLY")}
+                    className={`p-3 rounded-xl border-2 text-left transition-all ${editProjectVisibility === "TEAM_ONLY" ? "border-primary-500 bg-primary-50" : "border-gray-200"}`}>
+                    <div className="text-sm font-medium text-gray-900 mb-0.5">Team only</div>
+                    <div className="text-xs text-gray-500">Only project members can see it</div>
+                  </button>
                 </div>
               </div>
 

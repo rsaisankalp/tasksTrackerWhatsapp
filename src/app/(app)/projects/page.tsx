@@ -17,9 +17,49 @@ export default async function ProjectsPage({
 
   if (!orgId) redirect("/onboarding");
 
+  const [membership, currentUser] = await Promise.all([
+    prisma.orgMember.findUnique({
+      where: { orgId_userId: { orgId, userId: session.user.id } },
+    }),
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { email: true, phone: true },
+    }),
+  ]);
+
+  const isAdmin = !!membership && ["OWNER", "ADMIN"].includes(membership.role);
+  const contactFilters = [
+    currentUser?.email ? { email: currentUser.email } : null,
+    currentUser?.phone ? { phone: currentUser.phone } : null,
+  ].filter(Boolean) as any[];
+
+  const myContacts = contactFilters.length
+    ? await prisma.contact.findMany({
+        where: { orgId, OR: contactFilters },
+        select: { id: true },
+      })
+    : [];
+  const myContactIds = myContacts.map((contact) => contact.id);
+
   const [projects, contacts] = await Promise.all([
     prisma.project.findMany({
-      where: { orgId, status: { not: "ARCHIVED" } },
+      where: {
+        orgId,
+        status: { not: "ARCHIVED" },
+        ...(isAdmin
+          ? {}
+          : {
+              OR: [
+                { projectVisibility: "ALL" },
+                {
+                  projectVisibility: "TEAM_ONLY",
+                  ...(myContactIds.length
+                    ? { members: { some: { contactId: { in: myContactIds } } } }
+                    : { id: "__no_project__" }),
+                },
+              ],
+            }),
+      },
       include: {
         tasks: {
           where: { parentId: null },

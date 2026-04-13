@@ -23,21 +23,94 @@ export default async function DashboardPage({
     select: { name: true, email: true, phone: true },
   });
 
+  const membership = await prisma.orgMember.findUnique({
+    where: { orgId_userId: { orgId, userId: session.user.id } },
+  });
+  const isAdmin = !!membership && ["OWNER", "ADMIN"].includes(membership.role);
+
+  const contactFilters = [
+    currentUser?.email ? { email: currentUser.email } : null,
+    currentUser?.phone ? { phone: currentUser.phone } : null,
+  ].filter(Boolean) as any[];
+
+  const myContacts = contactFilters.length
+    ? await prisma.contact.findMany({
+        where: { orgId, OR: contactFilters },
+        select: { id: true },
+      })
+    : [];
+  const myContactIds = myContacts.map((contact) => contact.id);
+
+  const visibleProjects = await prisma.project.findMany({
+    where: {
+      orgId,
+      status: "ACTIVE",
+      ...(isAdmin
+        ? {}
+        : {
+            OR: [
+              { projectVisibility: "ALL" },
+              {
+                projectVisibility: "TEAM_ONLY",
+                ...(myContactIds.length
+                  ? { members: { some: { contactId: { in: myContactIds } } } }
+                  : { id: "__no_project__" }),
+              },
+            ],
+          }),
+    },
+    include: {
+      _count: { select: { tasks: { where: { parentId: null } } } },
+    },
+    orderBy: { updatedAt: "desc" },
+    take: 6,
+  });
+  const visibleProjectIds = visibleProjects.map((project) => project.id);
+
+  const taskWhere: any = {
+    orgId,
+    parentId: null,
+    ...(visibleProjectIds.length
+      ? {
+          OR: [
+            { projectId: null },
+            { projectId: { in: visibleProjectIds } },
+          ],
+        }
+      : { projectId: null }),
+  };
+
+  if (!isAdmin) {
+    taskWhere.AND = [
+      {
+        OR: [
+          { project: null },
+          { project: { taskVisibility: "ALL" } },
+          {
+            project: {
+              taskVisibility: "OWN_ONLY",
+            },
+            ...(myContactIds.length
+              ? { executorContactId: { in: myContactIds } }
+              : { id: "__no_task__" }),
+          },
+        ],
+      },
+    ];
+  }
+
   // Stats
-  const [taskStats, projects, recentTasks] = await Promise.all([
+  const [taskStats, recentTasks] = await Promise.all([
     prisma.task.groupBy({
       by: ["status"],
-      where: { orgId, parentId: null },
+      where: taskWhere,
       _count: true,
     }),
-    prisma.project.findMany({
-      where: { orgId, status: "ACTIVE" },
-      include: { _count: { select: { tasks: { where: { parentId: null } } } } },
-      orderBy: { updatedAt: "desc" },
-      take: 6,
-    }),
     prisma.task.findMany({
-      where: { orgId, parentId: null, status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] } },
+      where: {
+        ...taskWhere,
+        status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] },
+      },
       include: {
         executorContact: { select: { id: true, name: true, avatarUrl: true } },
         project: { select: { id: true, name: true, color: true } },
@@ -61,7 +134,7 @@ export default async function DashboardPage({
         blocked: statsMap["BLOCKED"] ?? 0,
         done: statsMap["DONE"] ?? 0,
       }}
-      projects={projects.map((p) => ({
+      projects={visibleProjects.map((p) => ({
         ...p,
         startDate: p.startDate?.toISOString() ?? null,
         endDate: p.endDate?.toISOString() ?? null,
