@@ -26,7 +26,7 @@ export default function InviteJoinClient({ org, inviteCode, seatsLeft, orgSlug }
       const res = await fetch("/api/auth/signin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken, orgSlug }),
+        body: JSON.stringify({ idToken, orgSlug, inviteCode }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error === "no_access" ? "You need a valid invite to join." : "Sign-in failed");

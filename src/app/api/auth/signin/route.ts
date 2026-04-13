@@ -8,7 +8,7 @@ const FIREBASE_API_KEY = "AIzaSyBIU_ZOSwaWcX3H822OvrVv67D5ToJ3hrE";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { idToken, orgSlug: requestedOrgSlug } = body;
+  const { idToken, orgSlug: requestedOrgSlug, inviteCode } = body;
   if (!idToken) {
     return NextResponse.json({ error: "Missing idToken" }, { status: 400 });
   }
@@ -53,8 +53,37 @@ export async function POST(req: NextRequest) {
   // 1. URL-based: orgSlug from request body (set by /{orgSlug} landing page) — takes priority
   // 2. Email domain: match user's email domain against org.emailDomains
   let targetOrg: { id: string; slug: string } | null = null;
+  let resolvedInvite:
+    | {
+        id: string;
+        orgId: string;
+        org: { id: string; slug: string };
+        maxUses: number;
+        usedCount: number;
+        expiresAt: Date | null;
+      }
+    | null = null;
 
-  if (requestedOrgSlug) {
+  if (inviteCode) {
+    resolvedInvite = await prisma.inviteCode.findUnique({
+      where: { code: inviteCode },
+      include: {
+        org: { select: { id: true, slug: true } },
+      },
+    });
+
+    if (
+      !resolvedInvite ||
+      (resolvedInvite.expiresAt && resolvedInvite.expiresAt < new Date()) ||
+      resolvedInvite.usedCount >= resolvedInvite.maxUses
+    ) {
+      return NextResponse.json({ error: "invalid_invite" }, { status: 403 });
+    }
+
+    targetOrg = resolvedInvite.org;
+  }
+
+  if (!targetOrg && requestedOrgSlug) {
     // URL-based: find org by slug and auto-add user
     const org = await prisma.organization.findUnique({
       where: { slug: requestedOrgSlug },
@@ -77,12 +106,27 @@ export async function POST(req: NextRequest) {
 
   // If a target org was found via domain match, add as OWNER; via URL slug, add as MEMBER
   if (targetOrg) {
-    const role = requestedOrgSlug ? "MEMBER" : "OWNER";
-    await prisma.orgMember.upsert({
+    const role = requestedOrgSlug || resolvedInvite ? "MEMBER" : "OWNER";
+
+    const existingMembership = await prisma.orgMember.findUnique({
       where: { orgId_userId: { orgId: targetOrg.id, userId: user.id } },
-      create: { orgId: targetOrg.id, userId: user.id, role },
-      update: {},
+      select: { id: true },
     });
+
+    if (!existingMembership) {
+      await prisma.$transaction(async (tx) => {
+        await tx.orgMember.create({
+          data: { orgId: targetOrg.id, userId: user.id, role },
+        });
+
+        if (resolvedInvite) {
+          await tx.inviteCode.update({
+            where: { id: resolvedInvite.id },
+            data: { usedCount: { increment: 1 } },
+          });
+        }
+      });
+    }
   }
 
 
