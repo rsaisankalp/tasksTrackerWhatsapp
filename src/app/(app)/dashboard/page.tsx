@@ -122,15 +122,14 @@ export default async function DashboardPage({
     prisma.task.findMany({
       where: {
         ...taskWhere,
-        status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] },
       },
       include: {
         executorContact: { select: { id: true, name: true, avatarUrl: true } },
         project: { select: { id: true, name: true, color: true } },
         _count: { select: { subtasks: true } },
       },
-      orderBy: [{ importance: "asc" }, { deadline: "asc" }],
-      take: 20,
+      orderBy: [{ status: "asc" }, { importance: "asc" }, { deadline: "asc" }],
+      take: 30,
     }),
   ]);
 

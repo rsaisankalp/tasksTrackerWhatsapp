@@ -16,15 +16,19 @@ interface DashboardProps {
 
 export default function DashboardClient({ orgId, stats, projects, tasks, currentUser }: DashboardProps) {
   const [showCreateTask, setShowCreateTask] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<string>("ALL");
+  const [priorityFilter, setPriorityFilter] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
 
   const total = stats.todo + stats.inProgress + stats.blocked + stats.done;
   const completionRate = total > 0 ? Math.round((stats.done / total) * 100) : 0;
 
-  const filteredTasks =
-    activeFilter === "ALL"
-      ? tasks
-      : tasks.filter((t) => t.importance === activeFilter || t.status === activeFilter);
+  const filteredTasks = tasks.filter((task) => {
+    const matchesPriority =
+      priorityFilter === "ALL" || task.importance === priorityFilter;
+    const matchesStatus =
+      statusFilter === "ALL" || task.status === statusFilter;
+    return matchesPriority && matchesStatus;
+  });
 
   const overdueCount = tasks.filter(
     (t) => t.deadline && isAfter(new Date(), new Date(t.deadline))
@@ -78,8 +82,8 @@ export default function DashboardClient({ orgId, stats, projects, tasks, current
     ALL: "All",
     EMERGENCY: "🚨 Emergency",
     HIGH: "🔴 High",
-    IN_PROGRESS: "⚡ Active",
-    BLOCKED: "🚧 Blocked",
+    MID: "🟡 Mid",
+    LOW: "🟢 Low",
   };
 
   return (
@@ -132,7 +136,15 @@ export default function DashboardClient({ orgId, stats, projects, tasks, current
         <div style={{ marginBottom: 20, background: "linear-gradient(135deg, rgba(239,68,68,0.08), rgba(239,68,68,0.04))", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 16 }}>⚠️</span>
           <span style={{ fontSize: 13, color: "#DC2626", fontWeight: 600 }}>{overdueCount} task{overdueCount !== 1 ? "s" : ""} overdue</span>
-          <button onClick={() => setActiveFilter("ALL")} style={{ marginLeft: "auto", background: "none", border: "none", color: "#DC2626", fontSize: 12, cursor: "pointer", textDecoration: "underline", fontWeight: 500 }}>View all</button>
+          <button
+            onClick={() => {
+              setPriorityFilter("ALL");
+              setStatusFilter("ALL");
+            }}
+            style={{ marginLeft: "auto", background: "none", border: "none", color: "#DC2626", fontSize: 12, cursor: "pointer", textDecoration: "underline", fontWeight: 500 }}
+          >
+            View all
+          </button>
         </div>
       )}
 
@@ -142,19 +154,40 @@ export default function DashboardClient({ orgId, stats, projects, tasks, current
         {/* Tasks */}
         <div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, gap: 12 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: "#0F172A", margin: 0 }}>Active Tasks</h2>
-            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-              {Object.entries(filterLabels).map(([key, label]) => (
-                <button key={key} onClick={() => setActiveFilter(key)}
-                  style={{ padding: "5px 12px", borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer", transition: "all 0.15s", border: "none",
-                    background: activeFilter === key ? "linear-gradient(135deg, #F47C20, #FF9B4A)" : "#F1F5F9",
-                    color: activeFilter === key ? "white" : "#64748B",
-                    boxShadow: activeFilter === key ? "0 2px 8px rgba(244,124,32,0.3)" : "none",
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: "#0F172A", margin: 0 }}>Tasks</h2>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                {Object.entries(filterLabels).map(([key, label]) => (
+                  <button key={key} onClick={() => setPriorityFilter(key)}
+                    style={{ padding: "5px 12px", borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer", transition: "all 0.15s", border: "none",
+                      background: priorityFilter === key ? "linear-gradient(135deg, #F47C20, #FF9B4A)" : "#F1F5F9",
+                      color: priorityFilter === key ? "white" : "#64748B",
+                      boxShadow: priorityFilter === key ? "0 2px 8px rgba(244,124,32,0.3)" : "none",
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                {[
+                  ["ALL", "All status"],
+                  ["TODO", "To Do"],
+                  ["IN_PROGRESS", "In Progress"],
+                  ["BLOCKED", "Blocked"],
+                  ["DONE", "Done"],
+                ].map(([key, label]) => (
+                  <button key={key} onClick={() => setStatusFilter(key)}
+                    style={{ padding: "5px 12px", borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer", transition: "all 0.15s", border: "1px solid #E2E8F0",
+                      background: statusFilter === key ? "#0F172A" : "white",
+                      color: statusFilter === key ? "white" : "#64748B",
+                      boxShadow: statusFilter === key ? "0 2px 8px rgba(15,23,42,0.18)" : "none",
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
