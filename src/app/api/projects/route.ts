@@ -119,6 +119,45 @@ export async function POST(req: NextRequest) {
   }
 
   const { memberContactIds, projectVisibility, taskVisibility, taskCreation, ...projectData } = parsed.data;
+  const resolvedProjectVisibility = projectVisibility ?? "TEAM_ONLY";
+  const resolvedTaskVisibility = taskVisibility ?? "ALL";
+  const resolvedTaskCreation = taskCreation ?? "ANYONE";
+
+  let resolvedMemberContactIds = [...(memberContactIds ?? [])];
+
+  if (resolvedProjectVisibility === "TEAM_ONLY") {
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { name: true, email: true, phone: true, image: true },
+    });
+
+    const contactFilters = buildContactIdentityFilters(user?.email, user?.phone);
+    let creatorContact = contactFilters.length
+      ? await prisma.contact.findFirst({
+          where: { orgId, OR: contactFilters },
+          select: { id: true },
+        })
+      : null;
+
+    if (!creatorContact && user && (user.email || user.phone)) {
+      creatorContact = await prisma.contact.create({
+        data: {
+          orgId,
+          name: user.name ?? user.email ?? "Me",
+          email: user.email ?? null,
+          phone: user.phone ?? null,
+          avatarUrl: user.image ?? null,
+          trustLevel: "INTERNAL",
+          createdByUserId: session.user.id,
+        },
+        select: { id: true },
+      });
+    }
+
+    if (creatorContact && !resolvedMemberContactIds.includes(creatorContact.id)) {
+      resolvedMemberContactIds.unshift(creatorContact.id);
+    }
+  }
 
   const project = await prisma.project.create({
     data: {
@@ -126,13 +165,13 @@ export async function POST(req: NextRequest) {
       name: projectData.name,
       description: projectData.description,
       color: projectData.color ?? "#6366f1",
-      projectVisibility: projectVisibility ?? "TEAM_ONLY",
-      taskVisibility: taskVisibility ?? "ALL",
-      taskCreation: taskCreation ?? "ANYONE",
+      projectVisibility: resolvedProjectVisibility,
+      taskVisibility: resolvedTaskVisibility,
+      taskCreation: resolvedTaskCreation,
       startDate: projectData.startDate ? new Date(projectData.startDate) : null,
       endDate: projectData.endDate ? new Date(projectData.endDate) : null,
-      members: memberContactIds?.length
-        ? { create: memberContactIds.map((contactId) => ({ contactId })) }
+      members: resolvedMemberContactIds.length
+        ? { create: resolvedMemberContactIds.map((contactId) => ({ contactId })) }
         : undefined,
     },
     include: { members: { include: { contact: true } } },
