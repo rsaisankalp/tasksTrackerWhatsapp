@@ -46,6 +46,10 @@ export default async function SettingsPage({
       ? prisma.organization.findMany({
           include: {
             owner: { select: { name: true, email: true } },
+            inviteCodes: {
+              orderBy: { createdAt: "desc" },
+              take: 8,
+            },
             members: {
               include: { user: { select: { id: true, name: true, email: true } } },
               orderBy: { role: "asc" },
@@ -77,6 +81,14 @@ export default async function SettingsPage({
         type: (o as any).type ?? "TEAM",
         createdAt: o.createdAt.toISOString(),
         owner: o.owner,
+        inviteCodes: o.inviteCodes.map((invite) => ({
+          id: invite.id,
+          code: invite.code,
+          maxUses: invite.maxUses,
+          usedCount: invite.usedCount,
+          expiresAt: invite.expiresAt?.toISOString() ?? null,
+          createdAt: invite.createdAt.toISOString(),
+        })),
         members: o.members.map((m) => ({
           id: m.id,
           userId: m.userId,

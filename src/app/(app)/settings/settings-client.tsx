@@ -42,6 +42,14 @@ interface PlatformOrg {
   createdAt: string;
   owner: { name: string | null; email: string };
   members: Array<{ id: string; userId: string; role: string; user: { id: string; name: string | null; email: string } }>;
+  inviteCodes: Array<{
+    id: string;
+    code: string;
+    maxUses: number;
+    usedCount: number;
+    expiresAt: string | null;
+    createdAt: string;
+  }>;
   _count: { projects: number; tasks: number };
 }
 
@@ -164,6 +172,7 @@ export default function SettingsClient({
 
   const isOwner = currentUserRole === "OWNER";
   const isAdminOrOwner = ["OWNER", "ADMIN"].includes(currentUserRole);
+  const isMemberOnly = !isAdminOrOwner;
 
   const handleSave = async () => {
     setSaving(true);
@@ -594,7 +603,11 @@ export default function SettingsClient({
         {activeTab === "whatsapp" && (
           <div className="p-6">
             <h2 className="text-base font-semibold text-gray-900 mb-1">WhatsApp Integration</h2>
-            <p className="text-sm text-gray-500 mb-6">Connect WhatsApp to send automated task reminders</p>
+            <p className="text-sm text-gray-500 mb-6">
+              {isAdminOrOwner
+                ? "Connect WhatsApp to send automated task reminders"
+                : "Your organization uses a shared WhatsApp connection for reminders. Members do not need to connect a personal number."}
+            </p>
 
             <div className={`border-2 rounded-2xl p-5 mb-6 flex items-center gap-4 ${waStatus === "CONNECTED" ? "border-green-200 bg-green-50" : "border-gray-200 bg-gray-50"}`}>
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${waStatus === "CONNECTED" ? "bg-green-500" : "bg-gray-300"}`}>
@@ -604,12 +617,30 @@ export default function SettingsClient({
               </div>
               <div className="flex-1">
                 <div className="font-medium text-gray-900">
-                  {waStatus === "CONNECTED" ? "Connected" : waStatus === "QR_PENDING" ? "Waiting for scan..." : "Disconnected"}
+                  {waStatus === "CONNECTED"
+                    ? isAdminOrOwner
+                      ? "Connected"
+                      : "Organization connection active"
+                    : waStatus === "QR_PENDING"
+                      ? "Waiting for scan..."
+                      : "Disconnected"}
                 </div>
-                <div className="text-sm text-gray-500">{waPhone ?? "No phone linked"}</div>
+                <div className="text-sm text-gray-500">
+                  {waStatus === "CONNECTED"
+                    ? isAdminOrOwner
+                      ? (waPhone ?? "No phone linked")
+                      : "Managed by an org admin"
+                    : "No active org connection"}
+                </div>
               </div>
               <div className={`w-3 h-3 rounded-full ${waStatus === "CONNECTED" ? "bg-green-500" : waStatus === "QR_PENDING" ? "bg-yellow-400 animate-pulse" : "bg-gray-300"}`} />
             </div>
+
+            {isMemberOnly && (
+              <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                You joined through an invite. Task reminders will use the organization WhatsApp setup automatically when admins assign and schedule them.
+              </div>
+            )}
 
             {qrData && (
               <div className="text-center mb-6">
@@ -985,7 +1016,43 @@ export default function SettingsClient({
                   </div>
                 </div>
                 {expandedOrg === o.id && (
-                  <div className="border-t border-gray-100 px-4 py-3 space-y-2">
+                  <div className="border-t border-gray-100 px-4 py-3 space-y-4">
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Invite History</div>
+                      {o.inviteCodes.length === 0 ? (
+                        <div className="text-sm text-gray-400">No invite links generated yet</div>
+                      ) : (
+                        <div className="space-y-2">
+                          {o.inviteCodes.map((invite) => {
+                            const inviteUrl = typeof window !== "undefined"
+                              ? `${window.location.origin}/invite/${invite.code}`
+                              : `/invite/${invite.code}`;
+                            const isExpired = invite.expiresAt && new Date(invite.expiresAt) < new Date();
+                            return (
+                              <div key={invite.id} className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-medium text-gray-900 break-all">{inviteUrl}</div>
+                                    <div className="mt-1 text-xs text-gray-500">
+                                      Used {invite.usedCount}/{invite.maxUses}
+                                      {invite.expiresAt ? ` · Expires ${new Date(invite.expiresAt).toLocaleDateString("en-IN")}` : " · No expiry"}
+                                      {isExpired ? " · Expired" : ""}
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={() => navigator.clipboard.writeText(inviteUrl).catch(() => {})}
+                                    className="flex-shrink-0 text-xs border border-gray-200 bg-white text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                                  >
+                                    Copy
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
                     {o.members.map((m) => (
                       <div key={m.id} className="flex items-center gap-3 py-1.5 px-2 rounded-lg hover:bg-gray-50">
                         <div className="w-7 h-7 bg-primary-100 rounded-full flex items-center justify-center text-primary-700 text-xs font-medium flex-shrink-0">
