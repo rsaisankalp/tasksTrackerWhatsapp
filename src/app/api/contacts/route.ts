@@ -35,14 +35,19 @@ export async function GET(req: NextRequest) {
 
   if (!orgId) return NextResponse.json({ error: "orgId required" }, { status: 400 });
 
-  const membership = await prisma.orgMember.findUnique({
-    where: { orgId_userId: { orgId, userId: session.user.id } },
-  });
+  const [membership, org] = await Promise.all([
+    prisma.orgMember.findUnique({ where: { orgId_userId: { orgId, userId: session.user.id } } }),
+    prisma.organization.findUnique({ where: { id: orgId }, select: { type: true } }),
+  ]);
   if (!membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  // GENERAL orgs: each user only sees their own contacts
+  const isGeneral = org?.type === "GENERAL";
 
   const contacts = await prisma.contact.findMany({
     where: {
       orgId,
+      ...(isGeneral ? { createdByUserId: session.user.id } : {}),
       ...(search
         ? {
             OR: [
@@ -85,6 +90,7 @@ export async function POST(req: NextRequest) {
   });
   if (!membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
+  const orgForCreate = await prisma.organization.findUnique({ where: { id: orgId }, select: { type: true } });
   const contact = await prisma.contact.create({
     data: {
       orgId,
@@ -95,6 +101,8 @@ export async function POST(req: NextRequest) {
       department: contactData.department || null,
       trustLevel: contactData.trustLevel,
       avatarUrl: contactData.avatarUrl || null,
+      // For GENERAL orgs, track which user created this contact
+      createdByUserId: orgForCreate?.type === "GENERAL" ? session.user.id : null,
     },
   });
 

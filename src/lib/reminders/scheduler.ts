@@ -4,6 +4,8 @@ import { baileysManager } from "@/lib/whatsapp/manager";
 import { shouldSendReminder, formatReminderMessage } from "./rules";
 import type { WorkingHoursConfig } from "@/types";
 
+const APP_URL = process.env.APP_URL ?? "https://tasks.vaidicpujas.in";
+
 export function startReminderScheduler() {
   console.log("[Scheduler] Starting reminder scheduler...");
 
@@ -30,7 +32,7 @@ async function checkAndSendReminders() {
       parentId: null,  // only top-level tasks
     },
     include: {
-      executorContact: true,
+      executorContact: { select: { id: true, name: true, phone: true, magicToken: true } },
       org: true,
       subtasks: {
         orderBy: { createdAt: "asc" },
@@ -46,6 +48,18 @@ async function checkAndSendReminders() {
   for (const task of tasks) {
     try {
       if (!task.executorContact?.phone) continue;
+
+      // Ensure magic token exists for the executor
+      let magicToken = task.executorContact.magicToken;
+      if (!magicToken) {
+        const { nanoid } = await import("nanoid");
+        magicToken = nanoid(32);
+        await prisma.contact.update({
+          where: { id: task.executorContact.id },
+          data: { magicToken },
+        });
+      }
+      const magicLink = `${APP_URL}/view/${magicToken}`;
 
       const orgConfig = task.org;
       const workingHoursConfig = (
@@ -91,7 +105,8 @@ async function checkAndSendReminders() {
         task.title,
         subtasksFormatted,
         task.deadline,
-        task.importance
+        task.importance,
+        magicLink
       );
 
       // Format phone: ensure E.164 → WhatsApp JID

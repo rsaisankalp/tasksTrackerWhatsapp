@@ -206,7 +206,20 @@ export async function POST(req: NextRequest) {
       });
       if (waSession?.status === "CONNECTED") {
         const phone = contact.phone!.replace(/\D/g, "");
-        await baileysManager.sendMessage(orgId, phone, msg);
+        const waMessageId = await baileysManager.sendMessage(orgId, phone, msg);
+        // Save reminder record so quoted replies can be matched
+        if (waMessageId) {
+          await prisma.reminder.create({
+            data: {
+              orgId,
+              taskId: task.id,
+              status: "SENT",
+              sentAt: new Date(),
+              messageBody: msg,
+              waMessageId,
+            },
+          });
+        }
       }
     } catch (err) {
       console.error("[tasks/POST] WhatsApp notification failed:", err);

@@ -131,6 +131,8 @@ export default function SettingsClient({
   const [showCreateOrg, setShowCreateOrg] = useState(false);
   const [newOrgName, setNewOrgName] = useState("");
   const [newOrgSlug, setNewOrgSlug] = useState("");
+  const [newOwnerEmail, setNewOwnerEmail] = useState("");
+  const [newOrgType, setNewOrgType] = useState<"TEAM" | "GENERAL">("TEAM");
   const [creatingOrg, setCreatingOrg] = useState(false);
   const [platformError, setPlatformError] = useState("");
   const [showCreateInvite, setShowCreateInvite] = useState(false);
@@ -274,7 +276,7 @@ export default function SettingsClient({
     ...(isSuperAdmin ? [{ id: "platform", label: "🛡️ Platform" }] : []),
   ];
 
-  const noSaveButton = ["whatsapp", "members", "invites", "platform"].includes(activeTab);
+  const noSaveButton = ["whatsapp", "members", "invites", "platform"].includes(activeTab) || !isAdminOrOwner;
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-3xl mx-auto">
@@ -282,6 +284,15 @@ export default function SettingsClient({
         <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
         <p className="text-gray-500 text-sm mt-0.5">Manage your organization preferences</p>
       </div>
+
+      {!isAdminOrOwner && (
+        <div className="mb-5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700 flex items-center gap-2">
+          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+          You have view-only access. Only Owners and Admins can change settings.
+        </div>
+      )}
 
       {/* Tabs — horizontal scroll on mobile */}
       <div className="flex gap-1 p-1 bg-gray-100 rounded-xl mb-6 overflow-x-auto">
@@ -311,7 +322,8 @@ export default function SettingsClient({
                 type="text"
                 value={orgName}
                 onChange={(e) => setOrgName(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                disabled={!isAdminOrOwner}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-gray-50 disabled:text-gray-400"
               />
             </div>
             <div>
@@ -352,7 +364,8 @@ export default function SettingsClient({
                     }
                   }}
                   placeholder="e.g. vvmvp.org"
-                  className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  disabled={!isAdminOrOwner}
+                  className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-gray-50"
                 />
                 <button
                   onClick={() => {
@@ -361,7 +374,8 @@ export default function SettingsClient({
                       setDomainInput("");
                     }
                   }}
-                  className="px-4 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-medium hover:bg-primary-700"
+                  disabled={!isAdminOrOwner}
+                  className="px-4 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-medium hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Add
                 </button>
@@ -374,12 +388,14 @@ export default function SettingsClient({
                       className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 border border-primary-200 px-3 py-1 rounded-full text-xs font-medium"
                     >
                       @{domain}
-                      <button
-                        onClick={() => setEmailDomains(emailDomains.filter((d) => d !== domain))}
-                        className="text-primary-400 hover:text-primary-700"
-                      >
-                        ×
-                      </button>
+                      {isAdminOrOwner && (
+                        <button
+                          onClick={() => setEmailDomains(emailDomains.filter((d) => d !== domain))}
+                          className="text-primary-400 hover:text-primary-700"
+                        >
+                          ×
+                        </button>
+                      )}
                     </span>
                   ))}
                 </div>
@@ -414,7 +430,8 @@ export default function SettingsClient({
                     onChange={(e) => item.setter(Number(e.target.value))}
                     min={1}
                     max={168}
-                    className="w-20 border border-gray-200 rounded-xl px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    disabled={!isAdminOrOwner}
+                    className="w-20 border border-gray-200 rounded-xl px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-gray-50 disabled:text-gray-400"
                   />
                   <span className="text-sm text-gray-500">hours</span>
                 </div>
@@ -436,7 +453,8 @@ export default function SettingsClient({
               <select
                 value={timezone}
                 onChange={(e) => setTimezone(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                disabled={!isAdminOrOwner}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white disabled:bg-gray-50 disabled:text-gray-400"
               >
                 {TIMEZONES.map((tz) => (
                   <option key={tz} value={tz}>{tz}</option>
@@ -450,10 +468,12 @@ export default function SettingsClient({
                 {DAYS.map((day, i) => (
                   <button
                     key={day}
-                    onClick={() =>
-                      setWorkDays(workDays.includes(i) ? workDays.filter((d) => d !== i) : [...workDays, i])
-                    }
-                    className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all border ${
+                    onClick={() => {
+                      if (!isAdminOrOwner) return;
+                      setWorkDays(workDays.includes(i) ? workDays.filter((d) => d !== i) : [...workDays, i]);
+                    }}
+                    disabled={!isAdminOrOwner}
+                    className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all border disabled:cursor-not-allowed ${
                       workDays.includes(i)
                         ? "bg-primary-500 border-primary-500 text-white"
                         : "border-gray-200 text-gray-500 hover:border-primary-300"
@@ -471,7 +491,8 @@ export default function SettingsClient({
                 <select
                   value={startHour}
                   onChange={(e) => setStartHour(Number(e.target.value))}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                  disabled={!isAdminOrOwner}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white disabled:bg-gray-50 disabled:text-gray-400"
                 >
                   {Array.from({ length: 24 }, (_, i) => (
                     <option key={i} value={i}>{i.toString().padStart(2, "0")}:00</option>
@@ -483,7 +504,8 @@ export default function SettingsClient({
                 <select
                   value={endHour}
                   onChange={(e) => setEndHour(Number(e.target.value))}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                  disabled={!isAdminOrOwner}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white disabled:bg-gray-50 disabled:text-gray-400"
                 >
                   {Array.from({ length: 24 }, (_, i) => i + 1).map((i) => (
                     <option key={i} value={i}>{i.toString().padStart(2, "0")}:00</option>
@@ -526,24 +548,26 @@ export default function SettingsClient({
               </div>
             )}
 
-            <div className="flex gap-3">
-              {waStatus !== "CONNECTED" ? (
-                <button
-                  onClick={handleConnectWa}
-                  disabled={connectingWa}
-                  className="flex-1 bg-green-600 text-white py-3 rounded-xl font-medium hover:bg-green-700 disabled:opacity-50 transition-colors text-sm"
-                >
-                  {connectingWa ? "Connecting..." : "Connect WhatsApp"}
-                </button>
-              ) : (
-                <button
-                  onClick={handleDisconnectWa}
-                  className="flex-1 border border-red-200 text-red-600 py-3 rounded-xl font-medium hover:bg-red-50 transition-colors text-sm"
-                >
-                  Disconnect
-                </button>
-              )}
-            </div>
+            {isAdminOrOwner && (
+              <div className="flex gap-3">
+                {waStatus !== "CONNECTED" ? (
+                  <button
+                    onClick={handleConnectWa}
+                    disabled={connectingWa}
+                    className="flex-1 bg-green-600 text-white py-3 rounded-xl font-medium hover:bg-green-700 disabled:opacity-50 transition-colors text-sm"
+                  >
+                    {connectingWa ? "Connecting..." : "Connect WhatsApp"}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleDisconnectWa}
+                    className="flex-1 border border-red-200 text-red-600 py-3 rounded-xl font-medium hover:bg-red-50 transition-colors text-sm"
+                  >
+                    Disconnect
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -927,31 +951,48 @@ export default function SettingsClient({
                   <h2 className="text-lg font-semibold text-gray-900 mb-5">Create Organization</h2>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Name</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Organization Name</label>
                       <input
                         type="text"
                         value={newOrgName}
-                        onChange={(e) => {
-                          setNewOrgName(e.target.value);
-                          setNewOrgSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""));
-                        }}
+                        onChange={(e) => setNewOrgName(e.target.value)}
                         placeholder="e.g. Vaidi Puja Services"
                         className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                         autoFocus
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Slug</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Org Type</label>
+                      <div className="flex gap-2">
+                        {[
+                          { value: "TEAM", label: "Team", desc: "Shared contacts & tasks" },
+                          { value: "GENERAL", label: "General", desc: "Private contacts per user" },
+                        ].map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setNewOrgType(opt.value as "TEAM" | "GENERAL")}
+                            className={`flex-1 p-3 rounded-xl border text-left text-sm transition-all ${newOrgType === opt.value ? "border-primary-500 bg-primary-50 text-primary-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                          >
+                            <div className="font-medium">{opt.label}</div>
+                            <div className="text-xs text-gray-400 mt-0.5">{opt.desc}</div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Email Domain</label>
                       <div className="flex rounded-xl border border-gray-200 overflow-hidden focus-within:ring-2 focus-within:ring-primary-500">
-                        <span className="bg-gray-50 px-3 py-3 text-sm text-gray-500 border-r border-gray-200">slug/</span>
+                        <span className="bg-gray-50 px-3 py-3 text-sm text-gray-500 border-r border-gray-200">@</span>
                         <input
                           type="text"
-                          value={newOrgSlug}
-                          onChange={(e) => setNewOrgSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
-                          placeholder="vaidi-puja"
+                          value={newOwnerEmail}
+                          onChange={(e) => setNewOwnerEmail(e.target.value.toLowerCase().replace(/^@/, "").replace(/\s/g, ""))}
+                          placeholder="vvmvp.org"
                           className="flex-1 px-4 py-3 text-sm focus:outline-none"
                         />
                       </div>
+                      <p className="text-xs text-gray-400 mt-1">e.g. <span className="font-mono">vvmvp.org</span> → info@vvmvp.org, devuser1@vvmvp.org will all be auto-added as owners.</p>
                     </div>
                   </div>
                   {platformError && (
@@ -963,20 +1004,36 @@ export default function SettingsClient({
                     </button>
                     <button
                       onClick={async () => {
-                        if (!newOrgName.trim() || !newOrgSlug.trim()) return;
+                        if (!newOrgName.trim()) return;
+                        // Validate domain format client-side
+                        if (newOwnerEmail.trim() && !newOwnerEmail.trim().includes(".")) {
+                          setPlatformError("Email domain must include a TLD, e.g. vvmvp.org");
+                          return;
+                        }
                         setCreatingOrg(true);
                         setPlatformError("");
                         try {
                           const res = await fetch("/api/orgs", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ name: newOrgName.trim(), slug: newOrgSlug.trim() }),
+                            body: JSON.stringify({
+                              name: newOrgName.trim(),
+                              type: newOrgType,
+                              ...(newOwnerEmail.trim() ? { emailDomain: newOwnerEmail.trim() } : {}),
+                            }),
                           });
                           const data = await res.json();
-                          if (!res.ok) throw new Error(data.error?.formErrors?.[0] ?? data.error ?? "Failed");
+                          if (!res.ok) {
+                            const err = data.error;
+                            const msg = typeof err === "string" ? err
+                              : err?.fieldErrors?.emailDomain?.[0] ? `Email domain: ${err.fieldErrors.emailDomain[0]}`
+                              : err?.formErrors?.[0] ?? "Failed to create org";
+                            throw new Error(msg);
+                          }
                           setShowCreateOrg(false);
                           setNewOrgName("");
-                          setNewOrgSlug("");
+                          setNewOwnerEmail("");
+                          setNewOrgType("TEAM");
                           window.location.reload();
                         } catch (e: any) {
                           setPlatformError(e.message);
@@ -984,7 +1041,7 @@ export default function SettingsClient({
                           setCreatingOrg(false);
                         }
                       }}
-                      disabled={!newOrgName.trim() || !newOrgSlug.trim() || creatingOrg}
+                      disabled={!newOrgName.trim() || creatingOrg}
                       className="flex-1 bg-primary-600 text-white py-3 rounded-xl text-sm font-medium hover:bg-primary-700 disabled:opacity-50 transition-colors"
                     >
                       {creatingOrg ? "Creating..." : "Create"}

@@ -159,8 +159,27 @@ export default function ContactsClient({
       const text = await file.text();
       const lines = text.trim().split("\n");
       const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
+      // RFC 4180-compliant CSV field parser
+      const parseCSVLine = (line: string): string[] => {
+        const result: string[] = [];
+        let cur = "";
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (ch === '"') {
+            if (inQuotes && line[i + 1] === '"') { cur += '"'; i++; }
+            else inQuotes = !inQuotes;
+          } else if (ch === "," && !inQuotes) {
+            result.push(cur.trim()); cur = "";
+          } else {
+            cur += ch;
+          }
+        }
+        result.push(cur.trim());
+        return result;
+      };
       const rows = lines.slice(1).map((line) => {
-        const vals = line.split(",").map((v) => v.trim().replace(/^"|"$/g, ""));
+        const vals = parseCSVLine(line);
         const obj: Record<string, string> = {};
         headers.forEach((h, i) => { obj[h] = vals[i] ?? ""; });
         return obj;

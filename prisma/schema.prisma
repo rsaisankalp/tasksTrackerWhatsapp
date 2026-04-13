@@ -76,6 +76,9 @@ model Organization {
   // "PERSONAL" = auto-created private workspace; "TEAM" = shared org
   type         String   @default("TEAM") // "PERSONAL" | "TEAM"
 
+  // Email of the intended owner — auto-onboards them as OWNER on first login
+  ownerEmail   String?
+
   // Email domains that auto-join users to this org (e.g. ["vaidicpujas.org"])
   emailDomains String[] @default([])
 
@@ -157,6 +160,9 @@ model Contact {
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
+  // For GENERAL orgs: contacts are private to the user who created them
+  createdByUserId String?
+
   org                Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
   assignedTasks      Task[]          @relation("TaskExecutor")
   projectMemberships ProjectMember[]
@@ -166,6 +172,13 @@ model Contact {
 
   @@index([orgId])
   @@index([phone])
+}
+
+model WaitlistEntry {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
 }
 
 enum TrustLevel {

@@ -46,8 +46,8 @@ export default function MobileNav({ orgId }: { orgId: string }) {
   const pathname = usePathname();
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-primary-950 border-t border-white/10 z-40 safe-bottom">
-      <div className="flex items-center justify-around px-2 py-2">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 safe-bottom border-t border-primary-100/80 bg-[rgba(255,250,244,0.95)] backdrop-blur-xl shadow-[0_-10px_30px_rgba(15,23,42,0.08)]">
+      <div className="flex items-center justify-around px-2 py-2.5">
         {navItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
@@ -55,7 +55,7 @@ export default function MobileNav({ orgId }: { orgId: string }) {
               key={item.href}
               href={`${item.href}?orgId=${orgId}`}
               className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-xl transition-all ${
-                isActive ? "text-white" : "text-primary-400"
+                isActive ? "bg-white text-primary-600 shadow-sm" : "text-stone-500"
               }`}
             >
               {item.icon(isActive)}

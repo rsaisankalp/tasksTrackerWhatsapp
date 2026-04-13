@@ -64,6 +64,8 @@ export async function PATCH(
       reminderHour: body.reminderHour,
       reminderInterval: body.reminderInterval,
       daysBeforeEvent: body.daysBeforeEvent,
+      recurringFrequency: body.recurringFrequency,
+      recurringDays: body.recurringDays,
       completedAt:
         body.status === "DONE" && !task.completedAt ? new Date() : undefined,
     },
