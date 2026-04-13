@@ -81,7 +81,7 @@ export default function Sidebar({ orgs, user }: SidebarProps) {
   }
 
   return (
-    <aside style={{ width: 248, flexShrink: 0, background: SB, display: "flex", flexDirection: "column", height: "100vh", borderRight: `1px solid ${BORDER}`, boxShadow: "inset -1px 0 0 rgba(255,255,255,0.65)" }} className="hidden md:flex">
+    <aside style={{ width: 248, flexShrink: 0, background: SB, flexDirection: "column", height: "100vh", borderRight: `1px solid ${BORDER}`, boxShadow: "inset -1px 0 0 rgba(255,255,255,0.65)" }} className="hidden md:flex">
       {/* Brand */}
       <div style={{ padding: "20px 16px 16px", borderBottom: `1px solid ${BORDER}` }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
