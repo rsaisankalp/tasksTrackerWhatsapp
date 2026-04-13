@@ -4,7 +4,7 @@ import { buildContactIdentityFilters } from "@/lib/contact-identity";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { formatReminderMessage } from "@/lib/reminders/rules";
-import { sendWhatsAppForExecutor } from "@/lib/whatsapp/delivery";
+import { sendWhatsAppUsingSenderPreference } from "@/lib/whatsapp/delivery";
 import { nanoid } from "nanoid";
 
 const APP_URL = process.env.APP_URL ?? "https://tasks.vaidicpujas.in";
@@ -302,10 +302,10 @@ export async function POST(req: NextRequest) {
         magicLink
       );
 
-      const sendResult = await sendWhatsAppForExecutor({
+      const sendResult = await sendWhatsAppUsingSenderPreference({
         orgId,
         phone: contact.phone!,
-        executorContactId: contact.id,
+        preferredUserId: session.user.id,
         text: msg,
       });
 
