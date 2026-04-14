@@ -103,12 +103,12 @@ export default function Sidebar({ orgs, user }: SidebarProps) {
         const data = await res.json();
         if (cancelled) return;
 
-        const live = String(data.liveStatus ?? "").toLowerCase();
-        const stored = String(data.status ?? "").toUpperCase();
+        const effective = String(data.effectiveStatus ?? "").toUpperCase();
+        const effectiveLive = String(data.effectiveStatus ?? "").toUpperCase();
 
-        if (live === "connected" || stored === "CONNECTED") {
+        if (effectiveLive === "CONNECTED" || effective === "CONNECTED") {
           setWaStatus("CONNECTED");
-        } else if (live === "connecting" || stored === "CONNECTING" || stored === "QR_PENDING") {
+        } else if (effectiveLive === "CONNECTING" || effective === "CONNECTING" || effective === "QR_PENDING") {
           setWaStatus("QR_PENDING");
         } else {
           setWaStatus("DISCONNECTED");
