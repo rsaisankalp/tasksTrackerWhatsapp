@@ -301,6 +301,40 @@ export class BaileysManager extends EventEmitter {
     }
   }
 
+  private async populateUserLidMappings(userId: string, session: WASession): Promise<void> {
+    try {
+      const memberships = await prisma.orgMember.findMany({
+        where: { userId },
+        select: { orgId: true },
+      });
+      const orgIds = memberships.map((membership) => membership.orgId);
+      if (orgIds.length === 0) return;
+
+      const contacts = await prisma.contact.findMany({
+        where: {
+          orgId: { in: orgIds },
+          phone: { not: null },
+        },
+        select: { phone: true },
+      });
+      const phones = [...new Set(contacts.map((contact) => contact.phone!).filter(Boolean))];
+      if (phones.length === 0) return;
+
+      const jids = phones.map((phone) => `${phone.replace(/\D/g, "")}@s.whatsapp.net`);
+      const results = await (session.socket as any).onWhatsApp(...jids);
+      if (!results) return;
+
+      for (const result of results) {
+        if (result.jid && result.lid) {
+          session.lidToPhone.set(result.lid, result.jid);
+          console.log(`[WA] User LID mapping: ${result.lid} → ${result.jid}`);
+        }
+      }
+    } catch (e) {
+      console.error(`[WA] Error populating user LID mappings for ${userId}:`, e);
+    }
+  }
+
   private clearGroupSenderKeyFiles(orgId: string, groupJid: string): void {
     const sessionPath = this.getSessionPath(orgId);
     const groupIdPart = groupJid.split("@")[0]; // e.g. "120363425378016060"
@@ -475,6 +509,7 @@ export class BaileysManager extends EventEmitter {
         }
         this.emit(`connected:${sessionKey}`, phone);
         console.log(`[WA] User ${userId} connected as ${phone}`);
+        this.populateUserLidMappings(userId, session).catch(console.error);
       }
 
       if (connection === "close") {
@@ -498,17 +533,34 @@ export class BaileysManager extends EventEmitter {
 
     socket.ev.on("creds.update", saveCreds);
 
+    const updateUserLidMap = (contacts: Partial<{ id: string; lid?: string; jid?: string }>[]) => {
+      for (const contact of contacts) {
+        const lid = contact.lid ?? (contact.id?.endsWith("@lid") ? contact.id : null);
+        const phone = contact.jid ?? (!contact.id?.endsWith("@lid") ? contact.id : null);
+        if (lid && phone) {
+          session.lidToPhone.set(lid, phone);
+          console.log(`[WA] User session LID mapping: ${lid} → ${phone}`);
+        }
+      }
+    };
+    socket.ev.on("contacts.upsert", updateUserLidMap);
+    socket.ev.on("contacts.update", updateUserLidMap);
+
     // Handle inbound messages from user's personal WhatsApp
     socket.ev.on("messages.upsert", async ({ messages, type }) => {
       if (type !== "notify") return;
       for (const msg of messages) {
         if (msg.key.fromMe) continue; // Skip messages sent by the user
+        const rawFrom = msg.key.remoteJid ?? "";
+        const from = (rawFrom.endsWith("@lid") && session.lidToPhone.get(rawFrom))
+          ? session.lidToPhone.get(rawFrom)!
+          : rawFrom;
         const body =
           msg.message?.conversation ||
           msg.message?.extendedTextMessage?.text ||
           msg.message?.ephemeralMessage?.message?.conversation ||
           "";
-        if (!body) continue;
+        if (!body || !from) continue;
         const quotedBody =
           msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.conversation ||
           msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.extendedTextMessage?.text ||
@@ -523,7 +575,7 @@ export class BaileysManager extends EventEmitter {
             },
             body: JSON.stringify({
               userId,
-              from: msg.key.remoteJid ?? "",
+              from,
               messageId: msg.key.id ?? "",
               body,
               quotedMessageId:
