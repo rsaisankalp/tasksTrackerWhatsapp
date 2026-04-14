@@ -188,6 +188,16 @@ export default function SettingsClient({
   const isOwner = currentUserRole === "OWNER";
   const isAdminOrOwner = ["OWNER", "ADMIN"].includes(currentUserRole);
   const isMemberOnly = !isAdminOrOwner;
+  const effectiveWaSource =
+    whatsAppDeliveryMode === "OWN"
+      ? (userWaStatus === "CONNECTED" ? "PERSONAL" : waStatus === "CONNECTED" ? "ORG" : "PERSONAL")
+      : (waStatus === "CONNECTED" ? "ORG" : userWaStatus === "CONNECTED" ? "PERSONAL" : "ORG");
+  const effectiveWaStatus =
+    whatsAppDeliveryMode === "OWN"
+      ? (userWaStatus === "CONNECTED" ? "CONNECTED" : waStatus === "CONNECTED" ? "CONNECTED" : userWaStatus === "QR_PENDING" ? "QR_PENDING" : waStatus === "QR_PENDING" ? "QR_PENDING" : "DISCONNECTED")
+      : (waStatus === "CONNECTED" ? "CONNECTED" : userWaStatus === "CONNECTED" ? "CONNECTED" : waStatus === "QR_PENDING" ? "QR_PENDING" : userWaStatus === "QR_PENDING" ? "QR_PENDING" : "DISCONNECTED");
+  const effectiveWaPhone =
+    effectiveWaSource === "PERSONAL" ? userWaPhone : waPhone;
 
   const handleSave = async () => {
     setSaving(true);
@@ -659,12 +669,35 @@ export default function SettingsClient({
               </p>
             </div>
 
+            {isAdminOrOwner && (
+              <div className="mb-6 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                <div className="text-sm font-semibold text-gray-900">Active sender</div>
+                <div className="mt-1 text-sm text-gray-700">
+                  {effectiveWaStatus === "CONNECTED"
+                    ? effectiveWaSource === "PERSONAL"
+                      ? `Personal WhatsApp${effectiveWaPhone ? ` · +${effectiveWaPhone}` : ""}`
+                      : `Organization WhatsApp${effectiveWaPhone ? ` · ${effectiveWaPhone}` : ""}`
+                    : effectiveWaStatus === "QR_PENDING"
+                      ? effectiveWaSource === "PERSONAL"
+                        ? "Personal WhatsApp is waiting for scan"
+                        : "Organization WhatsApp is waiting for scan"
+                      : "No active WhatsApp sender connected"}
+                </div>
+                <div className="mt-2 text-xs text-blue-700">
+                  Delivery mode is set to <strong>{whatsAppDeliveryMode === "OWN" ? "Own WhatsApp" : "Organization WhatsApp"}</strong>.
+                  {effectiveWaStatus === "CONNECTED" && effectiveWaSource !== (whatsAppDeliveryMode === "OWN" ? "PERSONAL" : "ORG")
+                    ? " The preferred sender is unavailable, so the fallback sender is active."
+                    : ""}
+                </div>
+              </div>
+            )}
+
             {/* ─── Admin/Owner: Org-level WhatsApp bot ─── */}
             {isAdminOrOwner && (
               <>
-                <h2 className="text-base font-semibold text-gray-900 mb-1">WhatsApp Integration</h2>
+                <h2 className="text-base font-semibold text-gray-900 mb-1">Organization WhatsApp</h2>
                 <p className="text-sm text-gray-500 mb-6">
-                  Connect WhatsApp to send automated task reminders
+                  Shared workspace sender for reminders, fallback delivery, and team automation
                 </p>
 
                 <div className={`border-2 rounded-2xl p-5 mb-6 flex items-center gap-4 ${waStatus === "CONNECTED" ? "border-green-200 bg-green-50" : "border-gray-200 bg-gray-50"}`}>
@@ -676,10 +709,10 @@ export default function SettingsClient({
                   <div className="flex-1">
                     <div className="font-medium text-gray-900">
                       {waStatus === "CONNECTED"
-                        ? "Connected"
+                        ? "Organization connected"
                         : waStatus === "QR_PENDING"
                           ? "Waiting for scan..."
-                          : "Disconnected"}
+                          : "Organization disconnected"}
                     </div>
                     <div className="text-sm text-gray-500">
                       {waStatus === "CONNECTED"
@@ -718,6 +751,32 @@ export default function SettingsClient({
                       Disconnect
                     </button>
                   )}
+                </div>
+
+                <div className={`border-2 rounded-2xl p-5 mb-6 flex items-center gap-4 ${userWaStatus === "CONNECTED" ? "border-green-200 bg-green-50" : "border-gray-200 bg-gray-50"}`}>
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center"
+                    style={{ background: userWaStatus === "CONNECTED" ? "linear-gradient(135deg, #25D366, #128C7E)" : "#D1D5DB" }}
+                  >
+                    <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900">
+                      {userWaStatus === "CONNECTED"
+                        ? "Personal WhatsApp connected"
+                        : userWaStatus === "QR_PENDING"
+                          ? "Personal WhatsApp waiting for scan..."
+                          : "Personal WhatsApp disconnected"}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {userWaStatus === "CONNECTED"
+                        ? `+${userWaPhone ?? "unknown"}`
+                        : "Use this when you want owner/admin reminders to come from your own number"}
+                    </div>
+                  </div>
+                  <div className={`w-3 h-3 rounded-full ${userWaStatus === "CONNECTED" ? "bg-green-500" : userWaStatus === "QR_PENDING" ? "bg-yellow-400 animate-pulse" : "bg-gray-300"}`} />
                 </div>
               </>
             )}
