@@ -88,17 +88,8 @@ export async function POST(req: NextRequest) {
   const phone = from.replace(/@.*$/, "");
   const jid = from;
 
-  // Only process DMs if:
-  //   1. Message contains "taskflow" anywhere (explicit bot command), OR
-  //   2. Message is a direct reply to a task reminder (quotedMessageId)
-  // Otherwise ignore — we don't want the bot interrupting normal conversations.
   const hasPrefix = /\btaskflow\b/i.test(body);
   const isTaskReply = !!quotedMessageId;
-
-  if (!hasPrefix && !isTaskReply) {
-    console.log(`[Webhook] DM ignored (no prefix/quote) from ${phone}: "${body.substring(0, 50)}"`);
-    return NextResponse.json({ success: true, processed: false });
-  }
 
   // Strip "taskflow" and surrounding filler words (hey, hi, ok, etc.) before processing
   const processedBody = hasPrefix
@@ -174,6 +165,10 @@ export async function POST(req: NextRequest) {
   try {
     let relatedTask: any = null;
     let relatedReminder: any = null;
+    const contact = await prisma.contact.findFirst({
+      where: { orgId, phone: { contains: phone.slice(-10) } },
+      select: { id: true, name: true, magicToken: true },
+    });
 
     // If reply to a specific message, find the original reminder
     if (quotedMessageId) {
@@ -193,32 +188,60 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Find active tasks assigned to this phone (even without a quoted message)
-    if (!relatedTask) {
-      const contact = await prisma.contact.findFirst({
-        where: { orgId, phone: { contains: phone.slice(-10) } },
-      });
-
-      if (contact) {
-        const tasks = await prisma.task.findMany({
-          where: {
-            orgId,
+    // For immediate follow-ups, bind to the most recent reminder for this executor
+    // before falling back to the latest active task.
+    if (!relatedTask && contact) {
+      relatedReminder = await prisma.reminder.findFirst({
+        where: {
+          orgId,
+          sentAt: { not: null },
+          task: {
             executorContactId: contact.id,
             parentId: null,
             status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] },
+            archivedStatus: { not: "ARCHIVED" },
           },
-          include: {
-            subtasks: { orderBy: { createdAt: "asc" } },
-            comments: { orderBy: { createdAt: "asc" }, take: 10 },
+        },
+        include: {
+          task: {
+            include: {
+              subtasks: { orderBy: { createdAt: "asc" } },
+              comments: { orderBy: { createdAt: "asc" }, take: 10 },
+            },
           },
-          orderBy: { updatedAt: "desc" },
-          take: 1,
-        });
-        if (tasks.length > 0) relatedTask = tasks[0];
+        },
+        orderBy: { sentAt: "desc" },
+      });
+
+      if (relatedReminder) {
+        relatedTask = relatedReminder.task;
       }
     }
 
+    if (!relatedTask && contact) {
+      const tasks = await prisma.task.findMany({
+        where: {
+          orgId,
+          executorContactId: contact.id,
+          parentId: null,
+          status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] },
+          archivedStatus: { not: "ARCHIVED" },
+        },
+        include: {
+          subtasks: { orderBy: { createdAt: "asc" } },
+          comments: { orderBy: { createdAt: "asc" }, take: 10 },
+        },
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+        take: 1,
+      });
+      if (tasks.length > 0) relatedTask = tasks[0];
+    }
+
     if (!relatedTask) {
+      if (!hasPrefix && !isTaskReply) {
+        console.log(`[Webhook] DM ignored (no matching task) from ${phone}: "${body.substring(0, 50)}"`);
+        return NextResponse.json({ success: true, processed: false });
+      }
       console.log(`[Webhook] No task found for message from ${phone}`);
       return NextResponse.json({ success: true, processed: false });
     }
@@ -360,7 +383,13 @@ export async function POST(req: NextRequest) {
     // Update reminder status if task was acknowledged
     if (
       relatedReminder &&
-      (aiResult.completedSubtaskIndices.length > 0 || aiResult.newTaskStatus === "DONE")
+      (
+        aiResult.completedSubtaskIndices.length > 0 ||
+        aiResult.blockedSubtaskIndices.length > 0 ||
+        aiResult.newTaskStatus === "DONE" ||
+        aiResult.newTaskStatus === "BLOCKED" ||
+        aiResult.newTaskStatus === "IN_PROGRESS"
+      )
     ) {
       await prisma.reminder.update({
         where: { id: relatedReminder.id },

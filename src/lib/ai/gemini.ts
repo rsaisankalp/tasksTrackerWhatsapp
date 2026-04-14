@@ -175,9 +175,11 @@ function simpleFallback(message: string, subtasks: SubtaskContext[]): WhatsAppPa
   const lower = message.toLowerCase().trim();
   const doneWords = ["done", "finished", "complete", "ho gaya", "kar diya"];
   const blockedWords = ["blocked", "stuck", "problem", "issue", "help"];
+  const progressWords = ["start", "started", "starting", "in progress", "working", "ongoing", "chalu", "kar raha"];
 
   const isDone = doneWords.some((w) => lower.includes(w));
   const isBlocked = blockedWords.some((w) => lower.includes(w));
+  const isInProgress = progressWords.some((w) => lower.includes(w));
 
   if (isDone) {
     // Check for specific subtask numbers
@@ -210,6 +212,17 @@ function simpleFallback(message: string, subtasks: SubtaskContext[]): WhatsAppPa
       newTaskStatus: "BLOCKED",
       comment: message,
       replyMessage: "🚧 Noted! I've marked this as blocked. The team will follow up.",
+    };
+  }
+
+  if (isInProgress) {
+    return {
+      intent: "in_progress",
+      completedSubtaskIndices: [],
+      blockedSubtaskIndices: [],
+      newTaskStatus: "IN_PROGRESS",
+      comment: message,
+      replyMessage: "🔄 Noted! I've marked this as in progress.",
     };
   }
 
