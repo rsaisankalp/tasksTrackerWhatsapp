@@ -129,7 +129,13 @@ export async function DELETE(
   });
 
   const tasks = await prisma.task.findMany({
-    where: { projectId: params.projectId },
+    where: {
+      projectId: params.projectId,
+      OR: [
+        { archivedStatus: null },
+        { archivedStatus: { not: "ARCHIVED" } },
+      ],
+    },
     select: { id: true, status: true },
   });
 
@@ -138,7 +144,6 @@ export async function DELETE(
       where: { id: task.id },
       data: {
         archivedStatus: task.status,
-        status: "ARCHIVED",
       },
     });
   }
@@ -162,7 +167,7 @@ export async function POST(
   });
 
   const tasks = await prisma.task.findMany({
-    where: { projectId: params.projectId, status: "ARCHIVED" },
+    where: { projectId: params.projectId, archivedStatus: { not: null } },
   });
 
   for (const task of tasks) {
