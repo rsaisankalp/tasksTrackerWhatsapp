@@ -8,7 +8,7 @@ rsync -az \
   --exclude '.git' \
   --exclude '.env.local' \
   --exclude 'ecosystem.config.js' \
-  /Users/rishika/code/productivity/ root@168.231.120.137:/var/www/taskflow/
+  /Users/rishika/code/productivity/tasksTrackerWhatsapp/ root@168.231.120.137:/var/www/taskflow/
 
 echo "→ Building on server..."
 ssh root@168.231.120.137 "cd /var/www/taskflow && DATABASE_URL='postgresql://taskflow:taskflow123@localhost:5432/taskflow' npx prisma db push && DATABASE_URL='postgresql://taskflow:taskflow123@localhost:5432/taskflow' npx prisma generate && DATABASE_URL='postgresql://taskflow:taskflow123@localhost:5432/taskflow' npm run build"
