@@ -87,6 +87,7 @@ export async function GET(req: NextRequest) {
     ...(projectId ? { projectId } : {}),
     ...(status ? { status: status as any } : {}),
     parentId: null,
+    project: { status: { not: "ARCHIVED" } },
   };
 
   if (access.isAdmin) {

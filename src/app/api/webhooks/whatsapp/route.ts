@@ -120,7 +120,13 @@ export async function POST(req: NextRequest) {
 
       if (contact) {
         const allTasks = await prisma.task.findMany({
-          where: { orgId, executorContactId: contact.id, parentId: null },
+          where: { 
+            orgId, 
+            executorContactId: contact.id, 
+            parentId: null,
+            status: { notIn: ["DONE", "ARCHIVED"] },
+            project: { status: { not: "ARCHIVED" } }
+          },
           include: {
             project: { select: { name: true, color: true } },
             subtasks: { orderBy: { createdAt: "asc" } },
@@ -128,7 +134,7 @@ export async function POST(req: NextRequest) {
           orderBy: [{ importance: "asc" }, { deadline: "asc" }],
         });
 
-        const pending = allTasks.filter((t) => t.status !== "DONE");
+        const pending = allTasks;
         const impEmoji: Record<string, string> = { EMERGENCY: "🚨", HIGH: "🔴", MID: "🟡", LOW: "🟢" };
         const stEmoji: Record<string, string> = { TODO: "⬜", IN_PROGRESS: "🔄", BLOCKED: "🚧" };
         const now = new Date();
@@ -539,7 +545,7 @@ async function handleGroupCommand(orgId: string, groupJid: string, body: string,
 
     // Fetch task titles for AI context
     const recentTasks = await prisma.task.findMany({
-      where: { orgId, parentId: null, status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] } },
+      where: { orgId, parentId: null, status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] }, project: { status: { not: "ARCHIVED" } } },
       select: { title: true },
       orderBy: { updatedAt: "desc" },
       take: 30,
@@ -554,7 +560,7 @@ async function handleGroupCommand(orgId: string, groupJid: string, body: string,
 
     if (intent === "list_tasks") {
       const tasks = await prisma.task.findMany({
-        where: { orgId, parentId: null, status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] } },
+        where: { orgId, parentId: null, status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] }, project: { status: { not: "ARCHIVED" } } },
         include: { executorContact: true, subtasks: true },
         orderBy: [{ importance: "asc" }, { deadline: "asc" }],
         take: 20,
@@ -579,11 +585,11 @@ async function handleGroupCommand(orgId: string, groupJid: string, body: string,
 
     } else if (intent === "status") {
       const [total, done, blocked, inProgress, emergency] = await Promise.all([
-        prisma.task.count({ where: { orgId, parentId: null, status: { not: "DONE" } } }),
+        prisma.task.count({ where: { orgId, parentId: null, status: { notIn: ["DONE", "ARCHIVED"] }, project: { status: { not: "ARCHIVED" } } } }),
         prisma.task.count({ where: { orgId, parentId: null, status: "DONE", completedAt: { gte: new Date(Date.now() - 7 * 86400000) } } }),
-        prisma.task.count({ where: { orgId, parentId: null, status: "BLOCKED" } }),
-        prisma.task.count({ where: { orgId, parentId: null, status: "IN_PROGRESS" } }),
-        prisma.task.count({ where: { orgId, parentId: null, importance: "EMERGENCY", status: { not: "DONE" } } }),
+        prisma.task.count({ where: { orgId, parentId: null, status: "BLOCKED", project: { status: { not: "ARCHIVED" } } } }),
+        prisma.task.count({ where: { orgId, parentId: null, status: "IN_PROGRESS", project: { status: { not: "ARCHIVED" } } } }),
+        prisma.task.count({ where: { orgId, parentId: null, importance: "EMERGENCY", status: { notIn: ["DONE", "ARCHIVED"] }, project: { status: { not: "ARCHIVED" } } } }),
       ]);
       reply = `📊 *Dashboard Summary*\n\n⬜ Pending: ${total}\n🔄 In Progress: ${inProgress}\n`;
       if (blocked > 0) reply += `🚧 Blocked: ${blocked}\n`;
@@ -592,7 +598,7 @@ async function handleGroupCommand(orgId: string, groupJid: string, body: string,
 
     } else if (intent === "blocked") {
       const tasks = await prisma.task.findMany({
-        where: { orgId, parentId: null, status: "BLOCKED" },
+        where: { orgId, parentId: null, status: "BLOCKED", project: { status: { not: "ARCHIVED" } } },
         include: { executorContact: true },
         take: 10,
       });
@@ -607,7 +613,7 @@ async function handleGroupCommand(orgId: string, groupJid: string, body: string,
 
     } else if (intent === "urgent") {
       const tasks = await prisma.task.findMany({
-        where: { orgId, parentId: null, status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] }, importance: { in: ["EMERGENCY", "HIGH"] } },
+        where: { orgId, parentId: null, status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] }, importance: { in: ["EMERGENCY", "HIGH"] }, project: { status: { not: "ARCHIVED" } } },
         include: { executorContact: true },
         orderBy: [{ importance: "asc" }, { deadline: "asc" }],
         take: 10,
@@ -668,7 +674,7 @@ async function handleGroupCommand(orgId: string, groupJid: string, body: string,
     } else if (intent === "overdue") {
       const now = new Date();
       const tasks = await prisma.task.findMany({
-        where: { orgId, parentId: null, status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] }, deadline: { lt: now } },
+        where: { orgId, parentId: null, status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] }, deadline: { lt: now }, project: { status: { not: "ARCHIVED" } } },
         include: { executorContact: true },
         orderBy: { deadline: "asc" },
         take: 15,
@@ -688,13 +694,13 @@ async function handleGroupCommand(orgId: string, groupJid: string, body: string,
       // Gather comprehensive org data and let AI answer the question
       const [allTasks, contacts, projects] = await Promise.all([
         prisma.task.findMany({
-          where: { orgId, parentId: null },
+          where: { orgId, parentId: null, project: { status: { not: "ARCHIVED" } } },
           include: { executorContact: true, project: true },
           orderBy: { updatedAt: "desc" },
           take: 200,
         }),
         prisma.contact.findMany({ where: { orgId }, select: { name: true } }),
-        prisma.project.findMany({ where: { orgId }, select: { name: true } }).catch(() => [] as { name: string }[]),
+        prisma.project.findMany({ where: { orgId, status: { not: "ARCHIVED" } }, select: { name: true } }).catch(() => [] as { name: string }[]),
       ]);
 
       // Build a structured text summary for the AI
