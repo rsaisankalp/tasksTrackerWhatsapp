@@ -199,7 +199,10 @@ export async function POST(req: NextRequest) {
             executorContactId: contact.id,
             parentId: null,
             status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] },
-            archivedStatus: { not: "ARCHIVED" },
+            OR: [
+              { archivedStatus: null },
+              { archivedStatus: { not: "ARCHIVED" } },
+            ],
           },
         },
         include: {
@@ -225,7 +228,10 @@ export async function POST(req: NextRequest) {
           executorContactId: contact.id,
           parentId: null,
           status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] },
-          archivedStatus: { not: "ARCHIVED" },
+          OR: [
+            { archivedStatus: null },
+            { archivedStatus: { not: "ARCHIVED" } },
+          ],
         },
         include: {
           subtasks: { orderBy: { createdAt: "asc" } },
