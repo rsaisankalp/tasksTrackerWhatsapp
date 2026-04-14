@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 
 const COLORS = [
@@ -46,8 +46,13 @@ interface ProjectsClientProps {
 
 export default function ProjectsClient({ orgId, contacts, initialProjects, archivedProjects = [] }: ProjectsClientProps) {
   const [projects, setProjects] = useState(initialProjects);
-  const [archived, setArchived] = useState(archivedProjects);
+  const [archived, setArchived] = useState<Project[]>([]);
   const [showArchived, setShowArchived] = useState(false);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setArchived(archivedProjects);
+  }, [archivedProjects]);
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -160,10 +165,17 @@ export default function ProjectsClient({ orgId, contacts, initialProjects, archi
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
-        <div>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{projects.length} active project{projects.length !== 1 ? "s" : ""}{archived.length > 0 && <button onClick={() => setShowArchived(!showArchived)} className="ml-2 text-primary-600 hover:underline text-sm font-medium">{showArchived ? "Hide" : `(${archived.length} archived)`}</button>}</p>
+          {archived.length > 0 && (
+            <button
+              onClick={() => setShowArchived(!showArchived)}
+              className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors ${showArchived ? "bg-gray-100 text-gray-600" : "bg-primary-50 text-primary-600 hover:bg-primary-100"}`}
+            >
+              {showArchived ? "Hide archived" : `${archived.length} archived`}
+            </button>
+          )}
         </div>
         <button
           onClick={() => setShowCreate(true)}
@@ -172,7 +184,7 @@ export default function ProjectsClient({ orgId, contacts, initialProjects, archi
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          New Project
+          <span className="hidden sm:inline">New Project</span>
         </button>
       </div>
 
@@ -209,21 +221,42 @@ export default function ProjectsClient({ orgId, contacts, initialProjects, archi
                   </div>
                   <div className="flex items-center gap-2">
                     {project.projectVisibility === "TEAM_ONLY" && (
-                      <span className="text-xs px-2 py-1 rounded-full font-medium bg-purple-100 text-purple-700">Team only</span>
+                      <span className="hidden sm:inline text-xs px-2 py-1 rounded-full font-medium bg-purple-100 text-purple-700">Team only</span>
                     )}
                     {project.taskVisibility === "OWN_ONLY" && (
-                      <span className="text-xs px-2 py-1 rounded-full font-medium bg-amber-100 text-amber-700">Private</span>
+                      <span className="hidden sm:inline text-xs px-2 py-1 rounded-full font-medium bg-amber-100 text-amber-700">Private</span>
                     )}
                     <span className={`text-xs px-2 py-1 rounded-full font-medium ${project.status === "ACTIVE" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
                       {project.status.charAt(0) + project.status.slice(1).toLowerCase()}
                     </span>
-                    <button
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleArchive(project.id); }}
-                      className="text-xs px-2 py-1 rounded-full font-medium bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors"
-                      title="Archive project"
-                    >
-                      Archive
-                    </button>
+                    <div className="relative">
+                      <button
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpenId(menuOpenId === project.id ? null : project.id); }}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                          <circle cx="12" cy="5" r="1.5" />
+                          <circle cx="12" cy="12" r="1.5" />
+                          <circle cx="12" cy="19" r="1.5" />
+                        </svg>
+                      </button>
+                      {menuOpenId === project.id && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setMenuOpenId(null)} />
+                          <div className="absolute right-0 top-full mt-1 bg-white border border-gray-100 rounded-xl shadow-lg z-50 overflow-hidden min-w-[120px]">
+                            <button
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpenId(null); handleArchive(project.id); }}
+                              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left text-gray-700 hover:bg-red-50 hover:text-red-600 transition-colors"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                              </svg>
+                              Archive
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -287,10 +320,13 @@ export default function ProjectsClient({ orgId, contacts, initialProjects, archi
 
       {/* Archived Projects Section */}
       {showArchived && archived.length > 0 && (
-        <div className="mt-8">
-          <div className="flex items-center justify-between mb-4">
+        <div className="mt-8 pt-8 border-t border-gray-100">
+          <div className="flex items-center gap-2 mb-4">
+            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+            </svg>
             <h2 className="text-lg font-semibold text-gray-700">Archived Projects</h2>
-            <span className="text-sm text-gray-500">{archived.length} archived</span>
+            <span className="text-xs text-gray-400">({archived.length})</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {archived.map((project) => {
@@ -301,34 +337,31 @@ export default function ProjectsClient({ orgId, contacts, initialProjects, archi
               return (
                 <div
                   key={project.id}
-                  className="bg-gray-50 border border-gray-200 rounded-2xl p-5 opacity-75"
+                  className="bg-gray-50/80 border border-gray-200 rounded-2xl p-5 hover:border-gray-300 transition-colors"
                 >
-                  <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-start justify-between mb-3">
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-200">
-                      <div className="w-4 h-4 rounded-full bg-gray-400" />
+                      <div className="w-4 h-4 rounded-full" style={{ backgroundColor: project.color }} />
                     </div>
                     <button
                       onClick={() => handleRestore(project.id)}
-                      className="text-xs px-3 py-1.5 rounded-full font-medium bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
-                      title="Restore project"
+                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium bg-green-500 text-white hover:bg-green-600 transition-colors"
                     >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
                       Restore
                     </button>
                   </div>
 
                   <h3 className="font-semibold text-gray-700 mb-1">{project.name}</h3>
                   {project.description && (
-                    <p className="text-sm text-gray-500 mb-2 line-clamp-2">{project.description}</p>
+                    <p className="text-sm text-gray-500 mb-3 line-clamp-2">{project.description}</p>
                   )}
 
-                  <div className="mt-2">
-                    <div className="flex justify-between text-xs text-gray-500 mb-1.5">
-                      <span>{total} tasks</span>
-                      <span>{pct}% done</span>
-                    </div>
-                    <div className="bg-gray-200 rounded-full h-1.5">
-                      <div className="h-1.5 rounded-full transition-all duration-300" style={{ width: `${pct}%`, backgroundColor: project.color }} />
-                    </div>
+                  <div className="flex items-center justify-between text-xs text-gray-400">
+                    <span>{total} tasks</span>
+                    <span>{pct}% done</span>
                   </div>
                 </div>
               );
