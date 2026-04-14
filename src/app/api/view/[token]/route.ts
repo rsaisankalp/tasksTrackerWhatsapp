@@ -20,7 +20,8 @@ export async function GET(
     where: {
       executorContactId: contact.id,
       parentId: null,
-      status: { not: "CANCELLED" },
+      status: { notIn: ["CANCELLED", "ARCHIVED"] },
+      project: { status: { not: "ARCHIVED" } },
     },
     include: {
       project: { select: { id: true, name: true, color: true } },

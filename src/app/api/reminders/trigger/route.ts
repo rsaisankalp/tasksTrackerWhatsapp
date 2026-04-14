@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
           status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] },
           executorContactId: { not: null },
           parentId: null,
+          project: { status: { not: "ARCHIVED" } },
         },
     include: {
       executorContact: true,

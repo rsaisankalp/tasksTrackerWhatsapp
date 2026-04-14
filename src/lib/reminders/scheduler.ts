@@ -23,13 +23,14 @@ export function startReminderScheduler() {
 async function checkAndSendReminders() {
   const now = new Date();
 
-  // Get all active tasks with executors
+  // Get all active tasks with executors (excluding archived projects)
   const tasks = await prisma.task.findMany({
     where: {
       status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] },
       executorContactId: { not: null },
       deadline: { not: null },
-      parentId: null,  // only top-level tasks
+      parentId: null,
+      project: { status: { not: "ARCHIVED" } },
     },
     include: {
       executorContact: { select: { id: true, name: true, phone: true, magicToken: true } },
