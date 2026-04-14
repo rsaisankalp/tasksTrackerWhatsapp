@@ -205,99 +205,80 @@ export default function ProjectsClient({ orgId, contacts, initialProjects, archi
           {projects.map((project) => {
             const total = project.tasks.length;
             const done = project.tasks.filter((t) => t.status === "DONE").length;
-            const inProgress = project.tasks.filter((t) => t.status === "IN_PROGRESS").length;
-            const blocked = project.tasks.filter((t) => t.status === "BLOCKED").length;
             const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
             return (
               <Link
                 key={project.id}
                 href={`/projects/${project.id}?orgId=${orgId}`}
-                className="group bg-white border border-gray-100 rounded-2xl p-5 hover:shadow-lg hover:border-gray-200 transition-all duration-200 cursor-pointer"
+                className="group bg-white border border-gray-100 rounded-2xl p-5 hover:shadow-lg hover:border-gray-200 transition-all duration-200 cursor-pointer flex flex-col min-h-[160px]"
               >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: project.color + "20" }}>
-                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: project.color }} />
+                <div className="flex items-start justify-between mb-3">
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: project.color + "20" }}>
+                    <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: project.color }} />
                   </div>
-                  <div className="flex items-center gap-2">
-                    {project.projectVisibility === "TEAM_ONLY" && (
-                      <span className="hidden sm:inline text-xs px-2 py-1 rounded-full font-medium bg-purple-100 text-purple-700">Team only</span>
-                    )}
-                    {project.taskVisibility === "OWN_ONLY" && (
-                      <span className="hidden sm:inline text-xs px-2 py-1 rounded-full font-medium bg-amber-100 text-amber-700">Private</span>
-                    )}
+                  <div className="flex items-center gap-1.5">
                     <span className={`text-xs px-2 py-1 rounded-full font-medium ${project.status === "ACTIVE" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
-                      {project.status.charAt(0) + project.status.slice(1).toLowerCase()}
+                      {project.status === "ACTIVE" ? "Active" : project.status}
                     </span>
-                    <div className="relative">
-                      <button
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpenId(menuOpenId === project.id ? null : project.id); }}
-                        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
-                      >
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                          <circle cx="12" cy="5" r="1.5" />
-                          <circle cx="12" cy="12" r="1.5" />
-                          <circle cx="12" cy="19" r="1.5" />
-                        </svg>
-                      </button>
-                      {menuOpenId === project.id && (
-                        <>
-                          <div className="fixed inset-0 z-40" onClick={() => setMenuOpenId(null)} />
-                          <div className="absolute right-0 top-full mt-1 bg-white border border-gray-100 rounded-xl shadow-lg z-50 overflow-hidden min-w-[120px]">
-                            <button
-                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpenId(null); handleArchive(project.id); }}
-                              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left text-gray-700 hover:bg-red-50 hover:text-red-600 transition-colors"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                              </svg>
-                              Archive
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpenId(menuOpenId === project.id ? null : project.id); }}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <circle cx="12" cy="5" r="1.5" />
+                        <circle cx="12" cy="12" r="1.5" />
+                        <circle cx="12" cy="19" r="1.5" />
+                      </svg>
+                    </button>
+                    {menuOpenId === project.id && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setMenuOpenId(null)} />
+                        <div className="absolute right-2 top-full mt-1 bg-white border border-gray-100 rounded-xl shadow-lg z-50 overflow-hidden min-w-[100px]">
+                          <button
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpenId(null); handleArchive(project.id); }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-gray-700 hover:bg-red-50 hover:text-red-600 transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                            </svg>
+                            Archive
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 
                 <h3 className="font-semibold text-gray-900 mb-1 group-hover:text-primary-700 transition-colors">{project.name}</h3>
                 {project.description && (
-                  <p className="text-sm text-gray-500 mb-2 line-clamp-2">{project.description}</p>
+                  <p className="text-xs text-gray-500 mb-2 line-clamp-1">{project.description}</p>
                 )}
 
-                {/* Team member avatars */}
+                <div className="mt-auto flex items-center justify-between">
+                  <span className="text-xs text-gray-400">{total} tasks</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: project.color }} />
+                    </div>
+                    <span className="text-xs text-gray-500">{pct}%</span>
+                  </div>
+                </div>
+
                 {project.members.length > 0 && (
-                  <div className="flex items-center gap-1 mb-3">
-                    {project.members.slice(0, 5).map((m) => (
+                  <div className="flex items-center gap-1 mt-2">
+                    {project.members.slice(0, 4).map((m) => (
                       <div
                         key={m.contactId}
-                        className="w-6 h-6 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 text-xs font-semibold border-2 border-white -ml-1 first:ml-0"
+                        className="w-5 h-5 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 text-[10px] font-semibold border border-white"
                         title={m.name}
                       >
                         {m.name[0]?.toUpperCase()}
                       </div>
                     ))}
-                    {project.members.length > 5 && (
-                      <span className="text-xs text-gray-400 ml-1">+{project.members.length - 5}</span>
+                    {project.members.length > 4 && (
+                      <span className="text-[10px] text-gray-400 ml-0.5">+{project.members.length - 4}</span>
                     )}
-                  </div>
-                )}
-
-                <div className="mt-2">
-                  <div className="flex justify-between text-xs text-gray-500 mb-1.5">
-                    <span>{total} tasks</span>
-                    <span>{pct}% done</span>
-                  </div>
-                  <div className="bg-gray-100 rounded-full h-1.5">
-                    <div className="h-1.5 rounded-full transition-all duration-300" style={{ width: `${pct}%`, backgroundColor: project.color }} />
-                  </div>
-                </div>
-
-                {total > 0 && (
-                  <div className="flex gap-3 mt-3">
-                    {inProgress > 0 && <span className="text-xs text-blue-600">{inProgress} active</span>}
-                    {blocked > 0 && <span className="text-xs text-red-600">{blocked} blocked</span>}
-                    {done > 0 && <span className="text-xs text-green-600">{done} done</span>}
                   </div>
                 )}
               </Link>
