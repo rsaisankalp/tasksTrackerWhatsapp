@@ -529,28 +529,29 @@ export default function ProjectDetailClient({
               )}
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
-              {project.status !== "ARCHIVED" && (
-                <button onClick={async () => { if (confirm("Archive this project? All tasks will be hidden.")) { await fetch(`/api/projects/${project.id}`, { method: "DELETE" }); window.location.href = `/projects?orgId=${orgId}`; } }}
-                  className="px-4 py-3 rounded-xl text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 transition-colors">
+            <div className="px-6 py-4 border-t border-gray-100 flex items-center gap-2 flex-wrap">
+              {project.status !== "ARCHIVED" ? (
+                <button onClick={async () => { if (confirm("Archive this project?")) { await fetch(`/api/projects/${project.id}`, { method: "DELETE" }); window.location.href = `/projects?orgId=${orgId}`; } }}
+                  className="px-4 py-2.5 rounded-xl text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 transition-colors">
                   Archive Project
                 </button>
-              )}
-              {project.status === "ARCHIVED" && (
+              ) : (
                 <button onClick={async () => { if (confirm("Restore this project?")) { await fetch(`/api/projects/${project.id}`, { method: "POST" }); setProject({ ...project, status: "ACTIVE" }); } }}
-                  className="px-4 py-3 rounded-xl text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 transition-colors">
+                  className="px-4 py-2.5 rounded-xl text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 transition-colors">
                   Restore Project
                 </button>
               )}
               <div className="flex-1" />
-              <button onClick={() => setShowSettings(false)}
-                className="flex-1 border border-gray-200 text-gray-600 py-3 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors">
-                Cancel
-              </button>
-              <button onClick={handleSaveSettings} disabled={!editName.trim() || savingSettings}
-                className="flex-1 bg-primary-600 text-white py-3 rounded-xl text-sm font-medium hover:bg-primary-700 disabled:opacity-50 transition-colors">
-                {savingSettings ? "Saving..." : "Save Changes"}
-              </button>
+              <div className="flex gap-2">
+                <button onClick={() => setShowSettings(false)}
+                  className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors">
+                  Cancel
+                </button>
+                <button onClick={handleSaveSettings} disabled={!editName.trim() || savingSettings}
+                  className="px-6 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-medium hover:bg-primary-700 disabled:opacity-50 transition-colors">
+                  {savingSettings ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
