@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { signOut as firebaseSignOut } from "firebase/auth";
 import { firebaseAuth } from "@/lib/firebase/client";
 import { useState, useEffect } from "react";
@@ -65,6 +65,7 @@ const navItems = [
 
 export default function Sidebar({ orgs, user }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [currentOrgIdx, setCurrentOrgIdx] = useState(0);
   const [orgMenuOpen, setOrgMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -84,6 +85,7 @@ export default function Sidebar({ orgs, user }: SidebarProps) {
     setCurrentOrgIdx(idx);
     setOrgMenuOpen(false);
     localStorage.setItem("currentOrgId", id);
+    router.push(`${pathname}?orgId=${id}`);
   };
 
   return (

@@ -530,6 +530,19 @@ export default function ProjectDetailClient({
             </div>
 
             <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
+              {project.status !== "ARCHIVED" && (
+                <button onClick={async () => { if (confirm("Archive this project? All tasks will be hidden.")) { await fetch(`/api/projects/${project.id}`, { method: "DELETE" }); window.location.href = `/projects?orgId=${orgId}`; } }}
+                  className="px-4 py-3 rounded-xl text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 transition-colors">
+                  Archive Project
+                </button>
+              )}
+              {project.status === "ARCHIVED" && (
+                <button onClick={async () => { if (confirm("Restore this project?")) { await fetch(`/api/projects/${project.id}`, { method: "POST" }); setProject({ ...project, status: "ACTIVE" }); } }}
+                  className="px-4 py-3 rounded-xl text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 transition-colors">
+                  Restore Project
+                </button>
+              )}
+              <div className="flex-1" />
               <button onClick={() => setShowSettings(false)}
                 className="flex-1 border border-gray-200 text-gray-600 py-3 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors">
                 Cancel

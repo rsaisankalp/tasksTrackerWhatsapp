@@ -42,7 +42,7 @@ export default async function ProjectsPage({
     : [];
   const myContactIds = myContacts.map((contact) => contact.id);
 
-  const [projects, contacts] = await Promise.all([
+  const [projects, archivedProjects, contacts] = await Promise.all([
     prisma.project.findMany({
       where: {
         orgId,
@@ -72,6 +72,19 @@ export default async function ProjectsPage({
       },
       orderBy: { createdAt: "desc" },
     }),
+    isAdmin ? prisma.project.findMany({
+      where: { orgId, status: "ARCHIVED" },
+      include: {
+        tasks: {
+          where: { parentId: null },
+          select: { id: true, status: true, importance: true },
+        },
+        members: {
+          include: { contact: { select: { id: true, name: true, avatarUrl: true } } },
+        },
+      },
+      orderBy: { updatedAt: "desc" },
+    }) : Promise.resolve([]),
     prisma.contact.findMany({
       where: { orgId },
       select: { id: true, name: true, phone: true, department: true },
@@ -84,6 +97,18 @@ export default async function ProjectsPage({
       orgId={orgId}
       contacts={contacts}
       initialProjects={projects.map((p) => ({
+        ...p,
+        startDate: p.startDate?.toISOString() ?? null,
+        endDate: p.endDate?.toISOString() ?? null,
+        createdAt: p.createdAt.toISOString(),
+        updatedAt: p.updatedAt.toISOString(),
+        members: p.members.map((m) => ({
+          contactId: m.contactId,
+          name: m.contact.name,
+          avatarUrl: m.contact.avatarUrl,
+        })),
+      }))}
+      archivedProjects={archivedProjects.map((p) => ({
         ...p,
         startDate: p.startDate?.toISOString() ?? null,
         endDate: p.endDate?.toISOString() ?? null,

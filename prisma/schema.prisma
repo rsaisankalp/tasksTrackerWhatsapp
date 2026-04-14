@@ -281,6 +281,8 @@ model Task {
   recurringFrequency String? // DAILY | WEEKLY | MONTHLY
   recurringDays      Int[]   // For WEEKLY: days of week (0=Sun…6=Sat); for MONTHLY: day of month
 
+  archivedStatus     String? // To keep track of previous status when archived
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -305,6 +307,7 @@ enum TaskStatus {
   IN_PROGRESS
   BLOCKED
   DONE
+  ARCHIVED
   CANCELLED
 }
 

@@ -128,5 +128,53 @@ export async function DELETE(
     data: { status: "ARCHIVED" },
   });
 
+  const tasks = await prisma.task.findMany({
+    where: { projectId: params.projectId },
+    select: { id: true, status: true },
+  });
+
+  for (const task of tasks) {
+    await prisma.task.update({
+      where: { id: task.id },
+      data: {
+        archivedStatus: task.status,
+        status: "ARCHIVED",
+      },
+    });
+  }
+
+  return NextResponse.json({ success: true });
+}
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { projectId: string } }
+) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const project = await getProject(params.projectId, session.user.id);
+  if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  await prisma.project.update({
+    where: { id: params.projectId },
+    data: { status: "ACTIVE" },
+  });
+
+  const tasks = await prisma.task.findMany({
+    where: { projectId: params.projectId, status: "ARCHIVED" },
+  });
+
+  for (const task of tasks) {
+    const newStatus = (task.archivedStatus && task.archivedStatus !== "ARCHIVED") ? task.archivedStatus : "TODO";
+    await prisma.task.update({
+      where: { id: task.id },
+      data: {
+        status: newStatus as import("@prisma/client").TaskStatus,
+        archivedStatus: null,
+      },
+    });
+  }
+
   return NextResponse.json({ success: true });
 }
