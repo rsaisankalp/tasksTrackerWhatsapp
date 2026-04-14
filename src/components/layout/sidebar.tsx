@@ -177,10 +177,11 @@ export default function Sidebar({ orgs, user }: SidebarProps) {
         <div className="text-[10px] font-semibold tracking-[0.8px] text-[#7C6F64] p-[8px_10px_4px] uppercase">Menu</div>
         {navItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+          const orgId = (mounted ? currentOrg : orgs[0])?.id ?? "";
           return (
             <Link
               key={item.href}
-              href={`${item.href}?orgId=${currentOrg?.id ?? ""}`}
+              href={`${item.href}?orgId=${orgId}`}
               className={`flex items-center gap-2.5 p-[9px_12px] rounded-[10px] text-[13px] transition-all
                 ${
                   isActive
