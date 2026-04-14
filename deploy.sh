@@ -2,7 +2,7 @@
 set -e
 
 echo "→ Syncing files..."
-rsync -az \
+rsync -az --delete \
   --exclude 'node_modules' \
   --exclude '.next' \
   --exclude '.git' \
