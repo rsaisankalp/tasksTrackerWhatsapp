@@ -266,8 +266,6 @@ model Task {
   importance  Importance @default(MID)
   eventType   EventType  @default(ONE_TIME)
 
-  archivedStatus TaskStatus?
-
   executorContactId String?
   createdById       String
 
@@ -310,7 +308,6 @@ enum TaskStatus {
   IN_PROGRESS
   BLOCKED
   DONE
-  ARCHIVED
   CANCELLED
   ARCHIVED
 }
