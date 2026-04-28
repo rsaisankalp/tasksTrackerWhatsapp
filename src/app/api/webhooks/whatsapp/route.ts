@@ -160,6 +160,38 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({ success: true, processed: false });
     }
+
+    // ── DM task creation / commands via AI intent ─────────────────────────────
+    // User prefixed the DM with "taskflow" but it's not a list query and not a
+    // reply to a task reminder. Run the same intent parser the group handler
+    // uses so members can create/update tasks from a personal DM to the bot.
+    try {
+      const allTasks = await prisma.task.findMany({
+        where: { orgId, parentId: null, status: { notIn: ["ARCHIVED", "CANCELLED"] } },
+        select: { title: true },
+      });
+      const taskTitles = allTasks.map((t) => t.title);
+      const { intent } = await parseGroupCommand(processedBody, taskTitles, null);
+
+      if (intent === "create_task") {
+        const details = await parseTaskCreation(processedBody);
+        const reply = details.followUpQuestion
+          ? `❓ ${details.followUpQuestion}\n\n_(Reply with the details or message again to retry.)_`
+          : await doCreateTask(orgId, details);
+        await sendReply(jid, reply).catch(console.error);
+        return NextResponse.json({ success: true, processed: true, intent: "create_task" });
+      }
+    } catch (e) {
+      console.error("[Webhook] DM intent parsing failed:", e);
+    }
+  }
+
+  // Only engage with a DM when the user explicitly invokes us (taskflow keyword)
+  // or replies to one of our reminders (quoted message). Otherwise stay silent —
+  // we're not a general-purpose chatbot for every message a contact sends.
+  if (!hasPrefix && !isTaskReply) {
+    console.log(`[Webhook] DM ignored (no taskflow keyword, not a reply) from ${phone}: "${body.substring(0, 50)}"`);
+    return NextResponse.json({ success: true, processed: false });
   }
 
   try {
@@ -244,10 +276,6 @@ export async function POST(req: NextRequest) {
     }
 
     if (!relatedTask) {
-      if (!hasPrefix && !isTaskReply) {
-        console.log(`[Webhook] DM ignored (no matching task) from ${phone}: "${body.substring(0, 50)}"`);
-        return NextResponse.json({ success: true, processed: false });
-      }
       console.log(`[Webhook] No task found for message from ${phone}`);
       return NextResponse.json({ success: true, processed: false });
     }

@@ -48,12 +48,14 @@ export default function CreateTaskModal({
   const [recurringFrequency, setRecurringFrequency] = useState("WEEKLY");
   const [recurringDays, setRecurringDays] = useState<number[]>([]);
   const [recurringMonthDay, setRecurringMonthDay] = useState(1);
+  const [reminderOffsetMinutes, setReminderOffsetMinutes] = useState(10);
   const [selfAssign, setSelfAssign] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [contactSearch, setContactSearch] = useState("");
+  const [confirmNoExecutor, setConfirmNoExecutor] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -88,6 +90,25 @@ export default function CreateTaskModal({
       setError("Task title is required");
       return;
     }
+
+    // Warn if user typed a contact name but never selected from the dropdown.
+    // Common cause: assignee field has text but executorContactId is empty,
+    // so the task is silently created with no executor and no reminders go out.
+    const hasUnresolvedSearch =
+      !selfAssign &&
+      !executorContactId &&
+      contactSearch.trim().length > 0;
+    const noExecutor = !selfAssign && !executorContactId;
+    if ((hasUnresolvedSearch || noExecutor) && !confirmNoExecutor) {
+      setError(
+        hasUnresolvedSearch
+          ? `"${contactSearch.trim()}" is not selected — pick from the dropdown, or click Create again to save without an assignee (no reminders will be sent).`
+          : "No one is assigned — no WhatsApp reminders will be sent. Click Create again to confirm."
+      );
+      setConfirmNoExecutor(true);
+      return;
+    }
+
     setLoading(true);
     setError("");
 
@@ -117,6 +138,7 @@ export default function CreateTaskModal({
               ? [recurringMonthDay]
               : [],
           } : {}),
+          ...(eventType === "ONE_TIME_EVENT" ? { reminderOffsetMinutes } : {}),
         }),
       });
 
@@ -211,8 +233,10 @@ export default function CreateTaskModal({
                 onChange={(e) => setEventType(e.target.value)}
                 className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
               >
-                <option value="ONE_TIME">One Time</option>
-                <option value="REPEATABLE">Recurring</option>
+                <option value="ONE_TIME">📋 One Time (task)</option>
+                <option value="ONE_TIME_EVENT">📅 Event (meeting/call)</option>
+                <option value="REGULAR">🔁 Regular (ongoing)</option>
+                <option value="REPEATABLE">🔄 Recurring (schedule)</option>
               </select>
             </div>
           </div>
@@ -280,12 +304,54 @@ export default function CreateTaskModal({
             </div>
           )}
 
+          {/* Event reminder offset */}
+          {eventType === "ONE_TIME_EVENT" && (
+            <div className="bg-blue-50 rounded-xl p-4 space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Remind me before the event</label>
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  { v: 10, l: "10 min" },
+                  { v: 30, l: "30 min" },
+                  { v: 60, l: "1 hr" },
+                  { v: 180, l: "3 hr" },
+                  { v: 1440, l: "1 day" },
+                ].map((opt) => (
+                  <button
+                    key={opt.v}
+                    type="button"
+                    onClick={() => setReminderOffsetMinutes(opt.v)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                      reminderOffsetMinutes === opt.v
+                        ? "bg-primary-600 text-white border-primary-600"
+                        : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                    }`}
+                  >
+                    {opt.l} before
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 text-xs text-gray-600">
+                <span>Or custom:</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={reminderOffsetMinutes}
+                  onChange={(e) => setReminderOffsetMinutes(Math.max(1, Number(e.target.value)))}
+                  className="w-20 border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+                <span>minutes before</span>
+              </div>
+            </div>
+          )}
+
           {/* Row: Deadline + Project */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Deadline</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                {eventType === "ONE_TIME_EVENT" ? "Event time" : "Deadline"}
+              </label>
               <input
-                type="date"
+                type={eventType === "ONE_TIME_EVENT" ? "datetime-local" : "date"}
                 value={deadline}
                 onChange={(e) => setDeadline(e.target.value)}
                 className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
@@ -322,6 +388,8 @@ export default function CreateTaskModal({
                   setSelfAssign((prev) => !prev);
                   setExecutorContactId("");
                   setContactSearch("");
+                  setConfirmNoExecutor(false);
+                  setError("");
                 }}
                 className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm border mb-2 transition-colors ${
                   selfAssign
@@ -345,7 +413,14 @@ export default function CreateTaskModal({
                 <input
                   type="text"
                   value={contactSearch}
-                  onChange={(e) => setContactSearch(e.target.value)}
+                  onChange={(e) => {
+                    setContactSearch(e.target.value);
+                    // Typing invalidates any previous selection so the user
+                    // doesn't accidentally submit a stale executorContactId.
+                    if (executorContactId) setExecutorContactId("");
+                    setConfirmNoExecutor(false);
+                    setError("");
+                  }}
                   placeholder="Search contacts..."
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 mb-2"
                 />
@@ -360,6 +435,8 @@ export default function CreateTaskModal({
                           onClick={() => {
                             setExecutorContactId(c.id);
                             setContactSearch(c.name);
+                            setConfirmNoExecutor(false);
+                            setError("");
                           }}
                           className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-left transition-colors ${
                             executorContactId === c.id ? "bg-primary-50" : ""

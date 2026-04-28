@@ -25,6 +25,7 @@ const CreateTaskSchema = z.object({
   reminderHour: z.number().optional(),
   reminderInterval: z.number().optional(),
   daysBeforeEvent: z.number().optional(),
+  reminderOffsetMinutes: z.number().int().positive().optional(),
   recurringFrequency: z.enum(["DAILY", "WEEKLY", "MONTHLY"]).optional(),
   recurringDays: z.array(z.number()).optional(),
   subtasks: z
@@ -295,13 +296,18 @@ export async function POST(req: NextRequest) {
         title: s.title,
         status: s.status,
       }));
-      const msg = formatReminderMessage(
-        task.title,
-        subtaskList,
-        task.deadline,
-        task.importance,
-        magicLink
-      );
+
+      const isEvent = task.eventType === "ONE_TIME_EVENT";
+      // For events, send a lightweight "you're invited" notice now so the executor
+      // knows about it, but DON'T record a Reminder — the scheduler will fire the
+      // timed reminder at (deadline - reminderOffsetMinutes).
+      const msg = isEvent
+        ? `📅 *Event scheduled*\n\n*${task.title}*\n${
+            task.deadline
+              ? `🕒 ${task.deadline.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" })}\n`
+              : ""
+          }🔔 You'll get a reminder ${task.reminderOffsetMinutes ?? 10} min before.\n\n📱 ${magicLink}`
+        : formatReminderMessage(task.title, subtaskList, task.deadline, task.importance, magicLink);
 
       const sendResult = await sendWhatsAppUsingSenderPreference({
         orgId,
@@ -310,7 +316,7 @@ export async function POST(req: NextRequest) {
         text: msg,
       });
 
-      if (sendResult?.waMessageId) {
+      if (sendResult?.waMessageId && !isEvent) {
         await prisma.reminder.create({
           data: {
             orgId,

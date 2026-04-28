@@ -9,8 +9,9 @@ const APP_URL = process.env.APP_URL ?? "https://tasks.vaidicpujas.in";
 export function startReminderScheduler() {
   console.log("[Scheduler] Starting reminder scheduler...");
 
-  // Run every 15 minutes
-  cron.schedule("*/15 * * * *", async () => {
+  // Run every 5 minutes — fine-grained enough that a "10 min before" event
+  // reminder fires within ~5 min of its trigger time.
+  cron.schedule("*/5 * * * *", async () => {
     console.log("[Scheduler] Checking reminders...");
     try {
       await checkAndSendReminders();
@@ -37,6 +38,7 @@ async function checkAndSendReminders() {
       org: true,
       subtasks: {
         orderBy: { createdAt: "asc" },
+        select: { id: true, title: true, status: true, updatedAt: true },
       },
       reminders: {
         where: { status: "SENT" },
@@ -72,21 +74,43 @@ async function checkAndSendReminders() {
       const lastReminder = task.reminders[0];
       const lastSentAt = lastReminder?.sentAt ?? null;
 
-      const shouldSend = shouldSendReminder(
-        task.importance,
-        lastSentAt,
-        now,
-        task.deadline,
-        {
-          emergencyInterval: orgConfig.emergencyInterval,
-          highInterval: orgConfig.highInterval,
-          midInterval: orgConfig.midInterval,
-          lowInterval: orgConfig.lowInterval,
-          workingHoursConfig,
-        }
-      );
+      // ── ONE_TIME_EVENT: send a single reminder at (deadline - offset) ──
+      // Don't apply interval logic; an event reminder is one-shot.
+      if (task.eventType === "ONE_TIME_EVENT") {
+        if (lastSentAt) continue; // already reminded
+        const offsetMin = task.reminderOffsetMinutes ?? 10;
+        const triggerAt = new Date(task.deadline!.getTime() - offsetMin * 60 * 1000);
+        // Fire if we're within the trigger window (now >= triggerAt) but the event hasn't passed yet
+        if (now < triggerAt) continue;
+        if (now > task.deadline!) continue; // event already over — skip
+        // (no working-hours filter for events — meetings happen when they happen)
+      } else {
+        // Reset interval from the most recent activity:
+        // last reminder sent OR last task/subtask update (whichever is later)
+        const lastSubtaskUpdate = task.subtasks.reduce<Date | null>((max, s) => {
+          const t = s.updatedAt as Date;
+          return max === null || t > max ? t : max;
+        }, null);
+        const lastActivity = [lastSentAt, task.updatedAt, lastSubtaskUpdate]
+          .filter((d): d is Date => d !== null)
+          .reduce<Date | null>((max, d) => (max === null || d > max ? d : max), null);
 
-      if (!shouldSend) continue;
+        const shouldSend = shouldSendReminder(
+          task.importance,
+          lastActivity,
+          now,
+          task.deadline,
+          {
+            emergencyInterval: orgConfig.emergencyInterval,
+            highInterval: orgConfig.highInterval,
+            midInterval: orgConfig.midInterval,
+            lowInterval: orgConfig.lowInterval,
+            workingHoursConfig,
+          }
+        );
+
+        if (!shouldSend) continue;
+      }
 
       // Format ALL subtasks with fixed indices (so user can always reference by number)
       const subtasksFormatted = task.subtasks.map((sub, i) => ({

@@ -266,6 +266,8 @@ model Task {
   importance  Importance @default(MID)
   eventType   EventType  @default(ONE_TIME)
 
+  archivedStatus TaskStatus?
+
   executorContactId String?
   createdById       String
 
@@ -275,7 +277,8 @@ model Task {
   // Reminder config
   reminderHour     Int? // For repeatable: time of day to remind (hour 0-23)
   reminderInterval Int? // Override interval in hours
-  daysBeforeEvent  Int? // For ONE_TIME_EVENT: remind N days before
+  daysBeforeEvent  Int? // Deprecated — superseded by reminderOffsetMinutes
+  reminderOffsetMinutes Int? // For ONE_TIME_EVENT: remind N minutes before deadline (e.g. 10 = 10 min before)
 
   // Recurring schedule
   recurringFrequency String? // DAILY | WEEKLY | MONTHLY
@@ -309,6 +312,7 @@ enum TaskStatus {
   DONE
   ARCHIVED
   CANCELLED
+  ARCHIVED
 }
 
 enum Importance {
