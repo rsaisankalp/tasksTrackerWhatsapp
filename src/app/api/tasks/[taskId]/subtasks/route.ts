@@ -4,13 +4,14 @@ import { prisma } from "@/lib/prisma";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { taskId: string } }
+  context: { params: Promise<{ taskId: string }> }
 ) {
+  const routeParams = await context.params;
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const parentTask = await prisma.task.findUnique({
-    where: { id: params.taskId },
+    where: { id: routeParams.taskId },
     include: { org: { include: { members: { where: { userId: session.user.id } } } } },
   });
 
@@ -26,7 +27,7 @@ export async function POST(
   const subtask = await prisma.task.create({
     data: {
       orgId: parentTask.orgId,
-      parentId: params.taskId,
+      parentId: routeParams.taskId,
       projectId: parentTask.projectId,
       title: body.title.trim(),
       description: body.description,

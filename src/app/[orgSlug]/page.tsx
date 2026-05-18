@@ -4,7 +4,7 @@ import { auth } from "@/auth";
 import OrgJoinClient from "./org-join-client";
 
 interface Props {
-  params: { orgSlug: string };
+  params: Promise<{ orgSlug: string }>;
 }
 
 // Known app route prefixes — don't treat these as org slugs
@@ -14,7 +14,7 @@ const RESERVED_PATHS = new Set([
 ]);
 
 export default async function OrgLandingPage({ params }: Props) {
-  const { orgSlug } = params;
+  const { orgSlug } = await params;
 
   if (RESERVED_PATHS.has(orgSlug)) {
     notFound();

@@ -4,13 +4,16 @@ import { cookies } from "next/headers";
 import { SESSION_OPTIONS, SessionData } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
-const FIREBASE_API_KEY = "AIzaSyBIU_ZOSwaWcX3H822OvrVv67D5ToJ3hrE";
+const FIREBASE_API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { idToken, orgSlug: requestedOrgSlug, inviteCode } = body;
   if (!idToken) {
     return NextResponse.json({ error: "Missing idToken" }, { status: 400 });
+  }
+  if (!FIREBASE_API_KEY) {
+    return NextResponse.json({ error: "Firebase auth is not configured" }, { status: 500 });
   }
 
   // Verify token with Firebase REST API
@@ -145,7 +148,7 @@ export async function POST(req: NextRequest) {
   });
 
   // Set session
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const session = await getIronSession<SessionData>(cookieStore, SESSION_OPTIONS);
   session.userId = user.id;
   session.email = user.email ?? "";

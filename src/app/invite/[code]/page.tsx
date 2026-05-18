@@ -4,11 +4,11 @@ import { auth } from "@/auth";
 import InviteJoinClient from "./invite-join-client";
 
 interface Props {
-  params: { code: string };
+  params: Promise<{ code: string }>;
 }
 
 export default async function InvitePage({ params }: Props) {
-  const { code } = params;
+  const { code } = await params;
 
   const invite = await prisma.inviteCode.findUnique({
     where: { code },

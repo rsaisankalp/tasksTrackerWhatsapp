@@ -11,9 +11,10 @@ async function getContact(token: string) {
 // GET /api/view/[token] — get tasks for contact
 export async function GET(
   req: NextRequest,
-  { params }: { params: { token: string } }
+  context: { params: Promise<{ token: string }> }
 ) {
-  const contact = await getContact(params.token);
+  const routeParams = await context.params;
+  const contact = await getContact(routeParams.token);
   if (!contact) return NextResponse.json({ error: "Invalid link" }, { status: 404 });
 
   const tasks = await prisma.task.findMany({
@@ -39,9 +40,10 @@ export async function GET(
 // PATCH /api/view/[token] — update task status
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { token: string } }
+  context: { params: Promise<{ token: string }> }
 ) {
-  const contact = await getContact(params.token);
+  const routeParams = await context.params;
+  const contact = await getContact(routeParams.token);
   if (!contact) return NextResponse.json({ error: "Invalid link" }, { status: 404 });
 
   const { taskId, status } = await req.json();

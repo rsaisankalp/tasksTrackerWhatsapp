@@ -12,17 +12,18 @@ function isPlatformAdmin(email: string): boolean {
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: { orgId?: string; tab?: string };
+  searchParams: Promise<{ orgId?: string; tab?: string }>;
 }) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
+  const resolvedSearchParams = await searchParams;
 
   const defaultMembership = await prisma.orgMember.findFirst({
     where: { userId: session.user.id },
     select: { orgId: true },
   });
 
-  const orgId = searchParams.orgId || defaultMembership?.orgId;
+  const orgId = resolvedSearchParams.orgId || defaultMembership?.orgId;
   if (!orgId) redirect("/onboarding");
 
   const membership = await prisma.orgMember.findUnique({
@@ -132,7 +133,7 @@ export default async function SettingsPage({
         invitedOrgId: entry.invitedOrgId ?? null,
         inviteCode: entry.inviteCode ?? null,
       }))}
-      initialTab={searchParams.tab ?? "general"}
+      initialTab={resolvedSearchParams.tab ?? "general"}
       org={{
         id: org.id,
         name: org.name,

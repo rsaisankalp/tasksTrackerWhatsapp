@@ -142,7 +142,7 @@ export class BaileysManager extends EventEmitter {
         // This allows the org admin (who IS the bot number) to query the group
         if (msg.key.fromMe) {
           if (!isGroupMsg) continue; // Always skip fromMe in DMs
-          if (session.sentGroupMessageIds.has(msg.key.id ?? "")) continue; // Skip bot's own replies
+          if (session.sentGroupMessageIds.has(msg.key?.id ?? "")) continue; // Skip bot's own replies
           // Otherwise: admin typed a command in the group — process it
         }
 
@@ -152,7 +152,7 @@ export class BaileysManager extends EventEmitter {
           msg.message?.extendedTextMessage?.text ||
           msg.message?.ephemeralMessage?.message?.conversation ||
           "";
-        console.log(`[WA] Processing body="${body}" from=${msg.key.remoteJid}`);
+        console.log(`[WA] Processing body="${body}" from=${msg.key?.remoteJid}`);
         if (!body) continue;
 
         await this.handleInboundMessage(orgId, msg);
@@ -162,13 +162,13 @@ export class BaileysManager extends EventEmitter {
 
   private async handleInboundMessage(orgId: string, msg: proto.IWebMessageInfo) {
     try {
-      const rawFrom = msg.key.remoteJid ?? "";
+      const rawFrom = msg.key?.remoteJid ?? "";
       const session = this.sessions.get(orgId);
       // Resolve LID to real phone JID if we have a mapping
       const from = (rawFrom.endsWith("@lid") && session?.lidToPhone.get(rawFrom))
         ? session.lidToPhone.get(rawFrom)!
         : rawFrom;
-      const messageId = msg.key.id ?? "";
+      const messageId = msg.key?.id ?? "";
       const body =
         msg.message?.conversation ||
         msg.message?.extendedTextMessage?.text ||

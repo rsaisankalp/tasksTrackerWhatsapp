@@ -32,7 +32,7 @@ export default async function AppLayout({
   // Refresh session orgId if it's stale (e.g. org created after login)
   const firstMembership = memberships[0];
   if (session.user.orgId !== firstMembership.orgId) {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const ironSession = await getIronSession<SessionData>(cookieStore, SESSION_OPTIONS);
     ironSession.orgId = firstMembership.orgId;
     ironSession.orgSlug = firstMembership.org.slug;

@@ -13,12 +13,13 @@ async function getContact(contactId: string, userId: string) {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { contactId: string } }
+  context: { params: Promise<{ contactId: string }> }
 ) {
+  const routeParams = await context.params;
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const contact = await getContact(params.contactId, session.user.id);
+  const contact = await getContact(routeParams.contactId, session.user.id);
   if (!contact) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   return NextResponse.json(contact);
@@ -26,17 +27,18 @@ export async function GET(
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { contactId: string } }
+  context: { params: Promise<{ contactId: string }> }
 ) {
+  const routeParams = await context.params;
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const contact = await getContact(params.contactId, session.user.id);
+  const contact = await getContact(routeParams.contactId, session.user.id);
   if (!contact) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const body = await req.json();
   const updated = await prisma.contact.update({
-    where: { id: params.contactId },
+    where: { id: routeParams.contactId },
     data: {
       name: body.name,
       phone: body.phone,
@@ -53,14 +55,15 @@ export async function PATCH(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { contactId: string } }
+  context: { params: Promise<{ contactId: string }> }
 ) {
+  const routeParams = await context.params;
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const contact = await getContact(params.contactId, session.user.id);
+  const contact = await getContact(routeParams.contactId, session.user.id);
   if (!contact) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  await prisma.contact.delete({ where: { id: params.contactId } });
+  await prisma.contact.delete({ where: { id: routeParams.contactId } });
   return NextResponse.json({ success: true });
 }

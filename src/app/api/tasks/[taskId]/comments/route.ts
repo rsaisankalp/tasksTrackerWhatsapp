@@ -4,8 +4,9 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { taskId: string } }
+  context: { params: Promise<{ taskId: string }> }
 ) {
+  const routeParams = await context.params;
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -14,7 +15,7 @@ export async function GET(
   // Verify task belongs to user's org
   const task = await prisma.task.findFirst({
     where: {
-      id: params.taskId,
+      id: routeParams.taskId,
       org: { members: { some: { userId: session.user.id } } },
     },
     select: { id: true },
@@ -25,7 +26,7 @@ export async function GET(
   }
 
   const comments = await prisma.taskComment.findMany({
-    where: { taskId: params.taskId },
+    where: { taskId: routeParams.taskId },
     orderBy: { createdAt: "asc" },
   });
 
@@ -34,8 +35,9 @@ export async function GET(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { taskId: string } }
+  context: { params: Promise<{ taskId: string }> }
 ) {
+  const routeParams = await context.params;
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -48,7 +50,7 @@ export async function POST(
 
   const task = await prisma.task.findFirst({
     where: {
-      id: params.taskId,
+      id: routeParams.taskId,
       org: { members: { some: { userId: session.user.id } } },
     },
     select: { id: true, orgId: true },

@@ -40,16 +40,17 @@ async function getProject(projectId: string, userId: string) {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { projectId: string } }
+  context: { params: Promise<{ projectId: string }> }
 ) {
+  const routeParams = await context.params;
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const project = await getProject(params.projectId, session.user.id);
+  const project = await getProject(routeParams.projectId, session.user.id);
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const tasks = await prisma.task.findMany({
-    where: { projectId: params.projectId, parentId: null },
+    where: { projectId: routeParams.projectId, parentId: null },
     include: {
       executorContact: { select: { id: true, name: true, phone: true, avatarUrl: true } },
       _count: { select: { subtasks: true } },
@@ -62,12 +63,13 @@ export async function GET(
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { projectId: string } }
+  context: { params: Promise<{ projectId: string }> }
 ) {
+  const routeParams = await context.params;
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const project = await getProject(params.projectId, session.user.id);
+  const project = await getProject(routeParams.projectId, session.user.id);
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const body = await req.json();
@@ -75,7 +77,7 @@ export async function PATCH(
 
   // Update project fields
   const updated = await prisma.project.update({
-    where: { id: params.projectId },
+    where: { id: routeParams.projectId },
     data: {
       name: rest.name,
       description: rest.description,
@@ -92,11 +94,11 @@ export async function PATCH(
   // If memberContactIds provided, sync team members
   if (Array.isArray(memberContactIds)) {
     // Delete all current members and recreate
-    await prisma.projectMember.deleteMany({ where: { projectId: params.projectId } });
+    await prisma.projectMember.deleteMany({ where: { projectId: routeParams.projectId } });
     if (memberContactIds.length > 0) {
       await prisma.projectMember.createMany({
         data: memberContactIds.map((contactId: string) => ({
-          projectId: params.projectId,
+          projectId: routeParams.projectId,
           contactId,
         })),
         skipDuplicates: true,
@@ -106,7 +108,7 @@ export async function PATCH(
 
   // Return updated project with members
   const withMembers = await prisma.project.findUnique({
-    where: { id: params.projectId },
+    where: { id: routeParams.projectId },
     include: { members: { include: { contact: { select: { id: true, name: true, avatarUrl: true, email: true } } } } },
   });
 
@@ -115,22 +117,23 @@ export async function PATCH(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { projectId: string } }
+  context: { params: Promise<{ projectId: string }> }
 ) {
+  const routeParams = await context.params;
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const project = await getProject(params.projectId, session.user.id);
+  const project = await getProject(routeParams.projectId, session.user.id);
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   await prisma.project.update({
-    where: { id: params.projectId },
+    where: { id: routeParams.projectId },
     data: { status: "ARCHIVED" },
   });
 
   const tasks = await prisma.task.findMany({
     where: {
-      projectId: params.projectId,
+      projectId: routeParams.projectId,
       OR: [
         { archivedStatus: null },
         { archivedStatus: { not: "ARCHIVED" } },
@@ -153,21 +156,22 @@ export async function DELETE(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { projectId: string } }
+  context: { params: Promise<{ projectId: string }> }
 ) {
+  const routeParams = await context.params;
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const project = await getProject(params.projectId, session.user.id);
+  const project = await getProject(routeParams.projectId, session.user.id);
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   await prisma.project.update({
-    where: { id: params.projectId },
+    where: { id: routeParams.projectId },
     data: { status: "ACTIVE" },
   });
 
   const tasks = await prisma.task.findMany({
-    where: { projectId: params.projectId, archivedStatus: { not: null } },
+    where: { projectId: routeParams.projectId, archivedStatus: { not: null } },
   });
 
   for (const task of tasks) {

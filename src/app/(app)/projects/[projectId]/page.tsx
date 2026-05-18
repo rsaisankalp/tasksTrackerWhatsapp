@@ -8,14 +8,16 @@ export default async function ProjectDetailPage({
   params,
   searchParams,
 }: {
-  params: { projectId: string };
-  searchParams: { orgId?: string };
+  params: Promise<{ projectId: string }>;
+  searchParams: Promise<{ orgId?: string }>;
 }) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
+  const resolvedParams = await params;
+  const resolvedSearchParams = await searchParams;
 
   const orgId =
-    searchParams.orgId ||
+    resolvedSearchParams.orgId ||
     (await prisma.orgMember.findFirst({ where: { userId: session.user.id } }))?.orgId;
 
   if (!orgId) redirect("/onboarding");
@@ -31,7 +33,7 @@ export default async function ProjectDetailPage({
   ]);
 
   const project = await prisma.project.findFirst({
-    where: { id: params.projectId, orgId },
+    where: { id: resolvedParams.projectId, orgId },
     include: {
       members: {
         include: { contact: { select: { id: true, name: true, avatarUrl: true, email: true } } },
@@ -75,7 +77,7 @@ export default async function ProjectDetailPage({
     }
   }
 
-  const taskFilter: any = { projectId: params.projectId, parentId: null };
+  const taskFilter: any = { projectId: resolvedParams.projectId, parentId: null };
   // Owner/admin always sees all tasks; regular members filtered by visibility
   if (project.taskVisibility === "OWN_ONLY" && !isAdmin && filterContactId) {
     taskFilter.executorContactId = filterContactId;

@@ -6,13 +6,14 @@ import ContactsClient from "./contacts-client";
 export default async function ContactsPage({
   searchParams,
 }: {
-  searchParams: { orgId?: string };
+  searchParams: Promise<{ orgId?: string }>;
 }) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
+  const resolvedSearchParams = await searchParams;
 
   const orgId =
-    searchParams.orgId ||
+    resolvedSearchParams.orgId ||
     (await prisma.orgMember.findFirst({ where: { userId: session.user.id } }))?.orgId;
 
   if (!orgId) redirect("/onboarding");

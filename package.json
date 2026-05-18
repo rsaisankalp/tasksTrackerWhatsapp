@@ -4,13 +4,17 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch server.ts",
-    "build": "next build",
-    "start": "node server.js",
+    "build": "next build --webpack && npm run build:server",
+    "start": "node dist/server.mjs",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "test": "echo 'no test specified' && exit 0",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "postinstall": "prisma generate",
+    "build:server": "esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/server.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -18,17 +22,17 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@google/generative-ai": "^0.21.0",
     "@prisma/client": "^5.22.0",
-    "@whiskeysockets/baileys": "^6.7.9",
+    "@whiskeysockets/baileys": "^7.0.0-rc11",
     "date-fns": "^3.6.0",
     "date-fns-tz": "^3.2.0",
     "firebase": "^12.12.0",
     "iron-session": "^8.0.4",
     "nanoid": "^5.1.7",
-    "next": "14.2.18",
+    "next": "^16.2.6",
     "node-cron": "^3.0.3",
     "qrcode": "^1.5.4",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
     "sharp": "^0.33.5",
     "swr": "^2.2.5",
     "zod": "^3.23.8"
@@ -40,10 +44,14 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.49",
+    "esbuild": "^0.28.0",
+    "postcss": "8.5.10",
     "prisma": "^5.22.0",
     "tailwindcss": "^3.4.15",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
+  },
+  "overrides": {
+    "postcss": "8.5.10"
   }
 }

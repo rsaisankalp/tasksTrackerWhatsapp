@@ -93,12 +93,13 @@ async function getTask(taskId: string, userId: string) {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { taskId: string } }
+  context: { params: Promise<{ taskId: string }> }
 ) {
+  const routeParams = await context.params;
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const task = await getTask(params.taskId, session.user.id);
+  const task = await getTask(routeParams.taskId, session.user.id);
   if (!task) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   return NextResponse.json(task);
@@ -106,18 +107,19 @@ export async function GET(
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { taskId: string } }
+  context: { params: Promise<{ taskId: string }> }
 ) {
+  const routeParams = await context.params;
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const task = await getTask(params.taskId, session.user.id);
+  const task = await getTask(routeParams.taskId, session.user.id);
   if (!task) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const body = await req.json();
 
   const updated = await prisma.task.update({
-    where: { id: params.taskId },
+    where: { id: routeParams.taskId },
     data: {
       title: body.title,
       description: body.description,
@@ -145,14 +147,15 @@ export async function PATCH(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { taskId: string } }
+  context: { params: Promise<{ taskId: string }> }
 ) {
+  const routeParams = await context.params;
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const task = await getTask(params.taskId, session.user.id);
+  const task = await getTask(routeParams.taskId, session.user.id);
   if (!task) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  await prisma.task.delete({ where: { id: params.taskId } });
+  await prisma.task.delete({ where: { id: routeParams.taskId } });
   return NextResponse.json({ success: true });
 }

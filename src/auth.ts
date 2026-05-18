@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { SESSION_OPTIONS, SessionData } from "@/lib/auth/session";
 
 export async function auth() {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const session = await getIronSession<SessionData>(cookieStore, SESSION_OPTIONS);
   if (!session.userId) return null;
   return {
